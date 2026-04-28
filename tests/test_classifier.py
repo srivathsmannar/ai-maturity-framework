@@ -13,7 +13,7 @@ def test_user_tool_result_skipped():
     assert classify_record(record) == "skip"
 
 def test_user_source_tool_skipped():
-    record = {"type": "user", "sourceToolUseID": "t1", "message": {"role": "user", "content": "x"}}
+    record = {"type": "user", "sourceToolUseID": "toolu_123", "message": {"role": "user", "content": "x"}}
     assert classify_record(record) == "skip"
 
 def test_assistant_tool_use():
@@ -24,7 +24,7 @@ def test_assistant_tool_use():
 
 def test_assistant_agent_spawn():
     record = {"type": "assistant", "message": {"role": "assistant", "content": [
-        {"type": "tool_use", "name": "Agent", "id": "t1", "input": {"prompt": "do stuff", "description": "test"}}
+        {"type": "tool_use", "name": "Agent", "id": "t1", "input": {"prompt": "do stuff"}}
     ]}}
     assert classify_record(record) == "agent_spawn"
 
@@ -40,14 +40,14 @@ def test_assistant_toolsearch_skipped():
     ]}}
     assert classify_record(record) == "skip"
 
-def test_assistant_ask_user_skipped():
+def test_assistant_ask_user_question_skipped():
     record = {"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "tool_use", "name": "AskUserQuestion", "id": "t1", "input": {"question": "which approach?"}}
     ]}}
     assert classify_record(record) == "skip"
 
 def test_system_hook_summary():
-    record = {"type": "system", "subtype": "stop_hook_summary", "hookCount": 2, "hookInfos": []}
+    record = {"type": "system", "subtype": "stop_hook_summary", "hookCount": 2}
     assert classify_record(record) == "session_config"
 
 def test_system_local_command():
@@ -59,7 +59,7 @@ def test_system_turn_duration_skipped():
     assert classify_record(record) == "skip"
 
 def test_system_api_error_skipped():
-    record = {"type": "system", "subtype": "api_error", "error": {}}
+    record = {"type": "system", "subtype": "api_error"}
     assert classify_record(record) == "skip"
 
 def test_progress_skipped():
@@ -70,7 +70,7 @@ def test_file_history_skipped():
     record = {"type": "file-history-snapshot", "snapshot": {}}
     assert classify_record(record) == "skip"
 
-def test_assistant_thinking_only():
+def test_assistant_thinking_only_skipped():
     record = {"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "thinking", "thinking": "let me think..."},
         {"type": "text", "text": "here is my answer"}
