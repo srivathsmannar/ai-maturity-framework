@@ -10,18 +10,43 @@ def cli():
 
 @cli.command()
 @click.argument('logs_path', type=click.Path(exists=True))
-@click.option('--team-name', default=None, help='Team name')
-@click.option('--user-name', default=None, help='User name')
-def upload(logs_path, team_name, user_name):
+@click.option('--team-name', default="unknown", help='Team name')
+@click.option('--user-name', default="unknown", help='User name')
+@click.option('--output-dir', type=click.Path(), default=None,
+              help='Output directory for assessment-input JSONL (default: data/input/)')
+def upload(logs_path, team_name, user_name, output_dir):
     """
-    Upload Claude Code session logs for analysis.
+    Extract and classify Claude Code session logs for assessment.
 
-    LOGS_PATH: Path to logs directory or .zip file
+    LOGS_PATH: Path to directory containing session .jsonl files
 
     Example:
         ai-maturity upload ~/.claude/projects/myapp --team-name myteam --user-name alice
     """
-    raise NotImplementedError
+    from datetime import date
+    from pathlib import Path
+    from ai_maturity.pipeline import process_session, write_output
+
+    logs = Path(logs_path)
+    out = Path(output_dir) if output_dir else Path("data/input")
+
+    session_files = sorted(logs.glob("*.jsonl"))
+    if not session_files:
+        click.echo(f"No .jsonl files found in {logs_path}")
+        return
+
+    total_records = 0
+    for session_file in session_files:
+        results = process_session(session_file, team=team_name, user=user_name)
+        if not results:
+            continue
+        today = date.today().isoformat()
+        out_name = f"{team_name}_{user_name}_{today}_{session_file.stem[:8]}.jsonl"
+        write_output(results, out / out_name)
+        total_records += len(results)
+        click.echo(f"  {session_file.name}: {len(results)} records extracted")
+
+    click.echo(f"\nDone. {total_records} records from {len(session_files)} sessions -> {out}/")
 
 
 @cli.command()
