@@ -55,19 +55,66 @@ def upload(logs_path, team_name, user_name, output_dir):
 
 
 @cli.command()
-@click.option('--team-name', default=None, help='Team name')
-@click.option('--user-name', default=None, help='User name')
-@click.option('--report-type', type=click.Choice(['individual', 'team']), default='individual')
-@click.option('--output-dir', type=click.Path(), default=None)
-def report(team_name, user_name, report_type, output_dir):
+@click.option('--scored-dir', type=click.Path(exists=True), default='data/output/',
+              help='Directory containing scored JSONL from assess (default: data/output/)')
+@click.option('--input-dir', type=click.Path(exists=True), default='data/input/',
+              help='Directory containing input JSONL from upload (default: data/input/)')
+@click.option('--output-dir', type=click.Path(), default='reports/',
+              help='Output directory for report files (default: reports/)')
+@click.option('--team-name', default=None, help='Filter by team name')
+@click.option('--user-name', default=None, help='Filter by user name')
+@click.option('--model', default='sonnet', help='Claude model for narrative writing')
+def report(scored_dir, input_dir, output_dir, team_name, user_name, model):
     """
-    Generate an AI maturity report from uploaded logs.
+    Generate an AI maturity report from scored assessment data.
 
     Example:
+        ai-maturity report --scored-dir data/output/ --input-dir data/input/
         ai-maturity report --team-name myteam --user-name alice
-        ai-maturity report --team-name myteam --report-type team
     """
-    raise NotImplementedError
+    from ai_maturity.report import generate_report
+
+    scored = Path(scored_dir)
+    inp = Path(input_dir)
+    out = Path(output_dir)
+
+    # Find scored JSONL files, optionally filtered by team/user
+    scored_files = sorted(scored.glob("*_scored.jsonl"))
+    if team_name:
+        scored_files = [f for f in scored_files if team_name in f.name]
+    if user_name:
+        scored_files = [f for f in scored_files if user_name in f.name]
+
+    if not scored_files:
+        click.echo(f"No scored JSONL files found in {scored}")
+        return
+
+    # Find input JSONL files
+    input_files = sorted(inp.glob("*.jsonl"))
+
+    out.mkdir(parents=True, exist_ok=True)
+
+    for scored_file in scored_files:
+        # Find matching input file by stem substring matching
+        stem = scored_file.stem.replace("_scored", "")
+        matching_input = None
+        for inf in input_files:
+            if stem in inf.stem or inf.stem in stem:
+                matching_input = inf
+                break
+
+        if matching_input is None and input_files:
+            click.echo(f"  Warning: no exact input match for {scored_file.name}, using {input_files[0].name}")
+            matching_input = input_files[0]
+
+        if matching_input is None:
+            click.echo(f"  Warning: no input files available for {scored_file.name}, skipping")
+            continue
+
+        md_content = generate_report(scored_file, matching_input, model=model)
+        out_path = out / f"{stem}_report.md"
+        out_path.write_text(md_content)
+        click.echo(f"Report written to {out_path}")
 
 
 @cli.command()
