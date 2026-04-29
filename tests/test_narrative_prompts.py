@@ -1,5 +1,7 @@
 from ai_maturity.narrative_prompts import build_dimension_prompt, build_executive_prompt
 
+PROJECT_CONTEXT = "The developer was building a CI demand attribution pipeline using Presto queries and Google Docs."
+
 FAKE_DIM_DATA = {
     "dimension": "capability",
     "average": 2.3,
@@ -16,6 +18,12 @@ FAKE_DIM_DATA = {
     ],
 }
 
+FAKE_EXEMPLARS = [
+    "use the presto-query skill for this",
+    "can you update the google doc?",
+    "run the query in daiquery workspace",
+]
+
 FAKE_SCORES = {
     "overall_score": 1.5,
     "maturity_label": "L2: Integrated",
@@ -27,25 +35,29 @@ FAKE_SCORES = {
     },
 }
 
-def test_dimension_prompt_contains_scores():
-    prompt = build_dimension_prompt(FAKE_DIM_DATA)
-    assert "ai_tool_adoption" in prompt
-    assert "L2" in prompt or "Integrated" in prompt
+def test_dimension_prompt_contains_project_context():
+    prompt = build_dimension_prompt(FAKE_DIM_DATA, PROJECT_CONTEXT, FAKE_EXEMPLARS)
+    assert "CI demand" in prompt
 
-def test_dimension_prompt_contains_evidence():
-    prompt = build_dimension_prompt(FAKE_DIM_DATA)
+def test_dimension_prompt_contains_exemplars():
+    prompt = build_dimension_prompt(FAKE_DIM_DATA, PROJECT_CONTEXT, FAKE_EXEMPLARS)
     assert "presto-query" in prompt
+    assert "google doc" in prompt
 
-def test_dimension_prompt_asks_for_narrative():
+def test_dimension_prompt_asks_contextual_questions():
+    prompt = build_dimension_prompt(FAKE_DIM_DATA, PROJECT_CONTEXT, FAKE_EXEMPLARS)
+    assert "quote" in prompt.lower() or "weave" in prompt.lower() or "cite" in prompt.lower()
+
+def test_dimension_prompt_works_without_context():
     prompt = build_dimension_prompt(FAKE_DIM_DATA)
-    assert "narrative" in prompt.lower() or "write" in prompt.lower()
-
-def test_executive_prompt_contains_overall():
-    prompt = build_executive_prompt(FAKE_SCORES, user="alice", team="platform")
-    assert "1.5" in prompt or "L2" in prompt
-    assert "alice" in prompt
-
-def test_executive_prompt_contains_dimensions():
-    prompt = build_executive_prompt(FAKE_SCORES, user="alice", team="platform")
     assert "capability" in prompt.lower()
-    assert "integration" in prompt.lower()
+    assert "ai_tool_adoption" in prompt
+
+def test_executive_prompt_contains_project_context():
+    prompt = build_executive_prompt(FAKE_SCORES, "alice", "platform", PROJECT_CONTEXT)
+    assert "CI demand" in prompt
+
+def test_executive_prompt_works_without_context():
+    prompt = build_executive_prompt(FAKE_SCORES, "alice", "platform")
+    assert "alice" in prompt
+    assert "1.5" in prompt

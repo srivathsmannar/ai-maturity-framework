@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, List, Optional
 
 
-def build_dimension_prompt(dim_data: dict) -> str:
+def build_dimension_prompt(
+    dim_data: dict,
+    project_context: str = "",
+    exemplar_texts: Optional[List[str]] = None,
+) -> str:
     dim = dim_data["dimension"]
     avg = dim_data["average"]
     subs = dim_data["sub_dimensions"]
@@ -13,30 +17,42 @@ def build_dimension_prompt(dim_data: dict) -> str:
         sub_details.append(
             f"- {sd['sub_dimension']}: L{sd['level']} ({sd['level_label']}), "
             f"confidence={sd['confidence']}\n"
-            f"  Reasoning: {sd['reasoning']}\n"
-            f"  Evidence: {'; '.join(str(e) for e in sd.get('evidence', []))}"
+            f"  Reasoning: {sd['reasoning']}"
         )
+
+    texts = exemplar_texts or []
+    exemplar_block = "\n".join(f'- "{t}"' for t in texts[:10]) if texts else "(no exemplar prompts available)"
+
+    context_block = f"## Project Context\n{project_context}\n" if project_context else ""
 
     return f"""You are writing a section of an AI Maturity Assessment report for the "{dim}" dimension.
 
-Dimension average score: {avg}
+{context_block}## Scores
+Dimension average: {avg}
 
-Sub-dimension results:
 {chr(10).join(sub_details)}
 
-Write a 2-3 sentence narrative that:
-1. Summarizes the developer's maturity in this dimension
-2. Highlights the strongest sub-dimension and why
-3. Identifies the biggest gap and gives one specific, actionable recommendation
+## Developer's Actual Prompts/Actions (for this dimension)
+{exemplar_block}
 
-Write in second person ("You demonstrate...", "Your gap is...").
-Be concise and direct. No headers, no bullet points — just prose."""
+## Writing Instructions
+
+Write a 3-5 sentence narrative paragraph that:
+1. Connects the developer's maturity to what they were actually building — don't just list scores
+2. Weaves in 1-2 direct quotes from their prompts as evidence (use quotation marks)
+3. Explains WHY their level is what it is given the project context — was a low score because they didn't need that capability, or because they missed an opportunity?
+4. Gives one specific, actionable recommendation tied to their actual project work
+
+Write in second person ("You demonstrated...", "When you asked...").
+Conversational, direct, human tone. No bullet points, no headers — just prose.
+Do NOT just restate the scores — interpret them in context."""
 
 
 def build_executive_prompt(
     scores: Dict,
     user: str,
     team: str,
+    project_context: str = "",
 ) -> str:
     dims = scores["dimensions"]
     dim_lines = "\n".join(
@@ -44,8 +60,11 @@ def build_executive_prompt(
         for dim, info in dims.items()
     )
 
+    context_block = f"## Project Context\n{project_context}\n" if project_context else ""
+
     return f"""You are writing the executive summary of an AI Maturity Assessment report.
 
+{context_block}## Scores
 Developer: {user}
 Team: {team}
 Overall score: {scores['overall_score']} — {scores['maturity_label']}
@@ -53,11 +72,14 @@ Overall score: {scores['overall_score']} — {scores['maturity_label']}
 Dimension scores:
 {dim_lines}
 
-Write a 3-4 sentence executive summary that:
-1. States the overall maturity level and what it means practically
-2. Highlights the strongest dimension
-3. Identifies the biggest gap
-4. Gives one high-level recommendation
+## Writing Instructions
 
-Write in second person ("You are currently at...", "Your strongest area...").
-Be concise and direct. No headers — just prose."""
+Write a 3-4 sentence executive summary that:
+1. Briefly describes what the developer was working on (from the project context)
+2. States their overall maturity level and what it means for their workflow
+3. Highlights what they did well with AI and where the biggest gap is
+4. Gives one high-level recommendation tied to their actual work
+
+Write in second person ("You used Claude to...", "Your strongest area...").
+Conversational, direct, human tone. No headers — just prose.
+Do NOT just restate the numbers — interpret them in context of what they were building."""
