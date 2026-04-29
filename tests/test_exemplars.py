@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from ai_maturity.exemplars import load_exemplars
+from ai_maturity.exemplars import load_exemplars, is_noise
 
 SAMPLE_INPUT = [
     {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
@@ -40,3 +40,42 @@ def test_load_exemplars_empty_file(tmp_path):
     f.write_text("")
     exemplars = load_exemplars(f, max_per_subdim=3)
     assert exemplars == {}
+
+def test_filters_xml_task_notifications(tmp_path):
+    records = [
+        {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "<task-notification><task-id>abc</task-id></task-notification>"}},
+        {"id": "in-002", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "use the presto-query skill"}},
+    ]
+    f = tmp_path / "input.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in records))
+    exemplars = load_exemplars(f, max_per_subdim=3)
+    texts = [r["data"]["prompt_text"] for r in exemplars["ai_tool_adoption"]]
+    assert "<task-notification>" not in str(texts)
+    assert "presto-query" in str(texts)
+
+def test_filters_interrupted_requests(tmp_path):
+    records = [
+        {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "[Request interrupted by user]"}},
+        {"id": "in-002", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "help me debug this"}},
+    ]
+    f = tmp_path / "input.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in records))
+    exemplars = load_exemplars(f, max_per_subdim=3)
+    texts = [r["data"]["prompt_text"] for r in exemplars["ai_tool_adoption"]]
+    assert "[Request interrupted" not in str(texts)
+
+def test_filters_exit_commands(tmp_path):
+    records = [
+        {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "<command-name>/exit</command-name>"}},
+        {"id": "in-002", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+         "data": {"prompt_text": "run the tests"}},
+    ]
+    f = tmp_path / "input.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in records))
+    exemplars = load_exemplars(f, max_per_subdim=3)
+    assert len(exemplars["ai_tool_adoption"]) == 1
