@@ -1,8 +1,8 @@
 """Report generator that assembles the full Markdown assessment report (T3 Step 4).
 
-Reads scored output and input JSONL files, makes Claude calls for narratives,
-and produces a complete Markdown report with executive summary, dimension
-sections, exemplars, and recommendations.
+Reads scored output and input JSONL files, calls Claude for narratives
+with project context and exemplar prompts woven in, and produces a
+compact Markdown report.
 """
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ai_maturity.claude_writer import call_claude_writer
+from ai_maturity.context_extractor import extract_project_context
 from ai_maturity.exemplars import load_exemplars
 from ai_maturity.narrative_prompts import build_dimension_prompt, build_executive_prompt
-from ai_maturity.prompt_builder import format_record
 from ai_maturity.scorer import compute_scores
 from ai_maturity.taxonomy import DIMENSIONS, LEVELS
 
@@ -58,14 +58,24 @@ def generate_report(
     meta = _extract_meta(scored)
     scores = compute_scores(scored)
     by_dim = _group_by_dimension(scored)
+
+    # Extract project context from input prompts
+    project_context = extract_project_context(input_path, model)
+
+    # Load exemplars keyed by sub-dimension
     exemplars = load_exemplars(input_path, max_per_subdim=3)
 
     sections: list[str] = []
 
-    # Executive summary
-    exec_prompt = build_executive_prompt(scores, meta["user"], meta["team"])
-    exec_narrative = call_claude_writer(exec_prompt, model) or _PLACEHOLDER_EXEC
+    # Header
     sections.append(_render_header(meta, scores))
+
+    # Project Context section
+    sections.append(_render_project_context(project_context))
+
+    # Executive summary
+    exec_prompt = build_executive_prompt(scores, meta["user"], meta["team"], project_context)
+    exec_narrative = call_claude_writer(exec_prompt, model) or _PLACEHOLDER_EXEC
     sections.append(_render_executive_summary(scores, exec_narrative))
 
     # Dimension sections
@@ -73,12 +83,14 @@ def generate_report(
     for dim in DIMENSIONS:
         sub_results = by_dim.get(dim, [])
         dim_data = _build_dim_data(dim, sub_results, scores)
-        dim_prompt = build_dimension_prompt(dim_data)
+
+        # Collect exemplar prompt_text strings for this dimension's sub-dimensions
+        exemplar_texts = _collect_exemplar_texts(dim, exemplars)
+
+        dim_prompt = build_dimension_prompt(dim_data, project_context, exemplar_texts)
         narrative = call_claude_writer(dim_prompt, model) or _PLACEHOLDER_DIM
         dim_narratives[dim] = narrative
-        sections.append(
-            _render_dimension_section(dim, dim_data, narrative, exemplars)
-        )
+        sections.append(_render_dimension_section(dim, dim_data, narrative))
 
     # Recommendations
     sections.append(_render_recommendations(dim_narratives))
@@ -144,6 +156,17 @@ def _build_dim_data(
     }
 
 
+def _collect_exemplar_texts(dim: str, exemplars: dict[str, list[dict]]) -> list[str]:
+    """Collect prompt_text strings for all sub-dimensions in a dimension."""
+    texts: list[str] = []
+    for sd in DIMENSIONS.get(dim, []):
+        for rec in exemplars.get(sd, []):
+            pt = rec.get("data", {}).get("prompt_text", "").strip()
+            if pt:
+                texts.append(pt)
+    return texts
+
+
 def _level_label(score: float) -> str:
     """Convert a numeric score to a level label using thresholds."""
     if score < 1.5:
@@ -156,6 +179,18 @@ def _level_label(score: float) -> str:
         return "L4"
 
 
+def _level_int(score: float) -> int:
+    """Convert a numeric score to a level integer."""
+    if score < 1.5:
+        return 1
+    elif score < 2.5:
+        return 2
+    elif score < 3.5:
+        return 3
+    else:
+        return 4
+
+
 def _render_header(meta: dict, scores: dict) -> str:
     """Render the report header with name, team, date."""
     assessed = meta["assessed_at"]
@@ -166,6 +201,11 @@ def _render_header(meta: dict, scores: dict) -> str:
         f"**Name**: {meta['user']} | **Team**: {meta['team']} | **Date**: {assessed}\n\n"
         f"---\n"
     )
+
+
+def _render_project_context(project_context: str) -> str:
+    """Render the project context section."""
+    return f"\n## Project Context\n\n{project_context}\n"
 
 
 def _render_executive_summary(scores: dict, narrative: str) -> str:
@@ -192,53 +232,28 @@ def _render_executive_summary(scores: dict, narrative: str) -> str:
     return "\n".join(lines)
 
 
-def _render_dimension_section(
-    dim: str,
-    dim_data: dict,
-    narrative: str,
-    exemplars: dict[str, list[dict]],
-) -> str:
-    """Render a full dimension section with sub-dimensions and exemplars."""
+def _render_dimension_section(dim: str, dim_data: dict, narrative: str) -> str:
+    """Render a compact dimension section with narrative and one-liner sub-dimension scores."""
     display = _DIM_DISPLAY.get(dim, dim)
     avg = dim_data["average"]
-    lvl = _level_label(avg)
+    lvl_str = _level_label(avg)
+    lvl_full = LEVELS.get(_level_int(avg), "Assisted")
 
-    lines = [f"\n## {display} ({lvl}: {LEVELS.get(_level_int(avg), 'Assisted')})\n"]
-    lines.append(f"{narrative}\n")
-
+    sd_parts = []
     for sd in dim_data["sub_dimensions"]:
-        sd_name = sd["sub_dimension"]
-        sd_display = sd_name.replace("_", " ").title()
-        sd_level = sd["level"]
-        sd_conf = sd["confidence"]
-        sd_reasoning = sd["reasoning"]
+        sd_display = sd["sub_dimension"].replace("_", " ").title()
+        sd_parts.append(f"{sd_display}: L{sd['level']}")
+    compact_line = " | ".join(sd_parts)
 
-        lines.append(f"### {sd_display} — L{sd_level} ({sd_conf} confidence)\n")
-        lines.append(f"> {sd_reasoning}\n")
+    return f"""
+---
 
-        # Exemplar evidence
-        sd_exemplars = exemplars.get(sd_name, [])
-        if sd_exemplars:
-            lines.append("**Exemplar evidence:**\n")
-            for rec in sd_exemplars:
-                formatted = format_record(rec)
-                lines.append(f"- {formatted}")
-            lines.append("")
+## {display} ({lvl_str}: {lvl_full})
 
-    lines.append("---\n")
-    return "\n".join(lines)
+{narrative}
 
-
-def _level_int(score: float) -> int:
-    """Convert a numeric score to a level integer."""
-    if score < 1.5:
-        return 1
-    elif score < 2.5:
-        return 2
-    elif score < 3.5:
-        return 3
-    else:
-        return 4
+{compact_line}
+"""
 
 
 def _render_recommendations(dim_narratives: dict[str, str]) -> str:
@@ -262,7 +277,6 @@ def _extract_last_sentence(text: str) -> str:
         return ""
 
     # Split on sentence-ending punctuation followed by space or end
-    # We look for '. ' boundaries working backwards
     sentences: list[str] = []
     current = []
     for i, ch in enumerate(text):

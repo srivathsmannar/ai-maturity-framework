@@ -33,13 +33,14 @@ def test_report_creates_md_file(tmp_path):
     scored_dir, input_dir = _make_scored_and_input(tmp_path)
     output_dir = tmp_path / "reports"
     with patch("ai_maturity.report.call_claude_writer", return_value="Solid narrative. Improve context."):
-        runner = CliRunner()
-        result = runner.invoke(cli, [
-            "report",
-            "--scored-dir", str(scored_dir),
-            "--input-dir", str(input_dir),
-            "--output-dir", str(output_dir),
-        ])
+        with patch("ai_maturity.report.extract_project_context", return_value="Developer built a pipeline."):
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "report",
+                "--scored-dir", str(scored_dir),
+                "--input-dir", str(input_dir),
+                "--output-dir", str(output_dir),
+            ])
     assert result.exit_code == 0, result.output
     md_files = list(output_dir.glob("*.md"))
     assert len(md_files) >= 1
@@ -48,13 +49,14 @@ def test_report_md_content(tmp_path):
     scored_dir, input_dir = _make_scored_and_input(tmp_path)
     output_dir = tmp_path / "reports"
     with patch("ai_maturity.report.call_claude_writer", return_value="Solid narrative. Improve context."):
-        runner = CliRunner()
-        runner.invoke(cli, [
-            "report",
-            "--scored-dir", str(scored_dir),
-            "--input-dir", str(input_dir),
-            "--output-dir", str(output_dir),
-        ])
+        with patch("ai_maturity.report.extract_project_context", return_value="Developer built a pipeline."):
+            runner = CliRunner()
+            runner.invoke(cli, [
+                "report",
+                "--scored-dir", str(scored_dir),
+                "--input-dir", str(input_dir),
+                "--output-dir", str(output_dir),
+            ])
     md_file = list(output_dir.glob("*.md"))[0]
     content = md_file.read_text()
     assert "AI Maturity Assessment Report" in content
@@ -64,11 +66,12 @@ def test_report_prints_path(tmp_path):
     scored_dir, input_dir = _make_scored_and_input(tmp_path)
     output_dir = tmp_path / "reports"
     with patch("ai_maturity.report.call_claude_writer", return_value="Solid narrative. Improve context."):
-        runner = CliRunner()
-        result = runner.invoke(cli, [
-            "report",
-            "--scored-dir", str(scored_dir),
-            "--input-dir", str(input_dir),
-            "--output-dir", str(output_dir),
-        ])
+        with patch("ai_maturity.report.extract_project_context", return_value="Developer built a pipeline."):
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "report",
+                "--scored-dir", str(scored_dir),
+                "--input-dir", str(input_dir),
+                "--output-dir", str(output_dir),
+            ])
     assert ".md" in result.output
