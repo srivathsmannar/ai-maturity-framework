@@ -158,22 +158,36 @@ def assess(input_dir, output_dir, team_name, user_name, model, save_context):
         click.echo(f"No input JSONL files found in {inp}")
         return
 
-    all_results: list[dict] = []
+    from datetime import date as date_cls
 
-    for input_file in input_files:
-        click.echo(f"Grading: {input_file.name}")
-        results = grade_session(input_file, ground_truth_path, model=model)
-        all_results.extend(results)
+    today = date_cls.today().isoformat()
+    team_label = team_name or "all"
+    user_label = user_name or "all"
 
-        # Write scored output
-        out_name = input_file.stem + "_scored.jsonl"
-        write_output(results, out / out_name)
-        click.echo(f"  -> {out / out_name} ({len(results)} sub-dimensions)")
+    # Merge all input files into one combined file
+    merged_name = f"{team_label}_{user_label}_{today}_merged.jsonl"
+    merged_path = inp / merged_name
+    merged_path.parent.mkdir(parents=True, exist_ok=True)
+    record_count = 0
+    with open(merged_path, "w") as out_f:
+        for input_file in input_files:
+            with open(input_file) as in_f:
+                for line in in_f:
+                    out_f.write(line)
+                    record_count += 1
 
-    # Compute aggregate scores
-    scores = compute_scores(all_results)
+    click.echo(f"Merged {len(input_files)} input files ({record_count} records) -> {merged_path.name}")
+    click.echo("Grading...")
 
-    # Print summary
+    results = grade_session(merged_path, ground_truth_path, model=model)
+
+    # Write single scored output
+    out_name = f"{team_label}_{user_label}_{today}_scored.jsonl"
+    write_output(results, out / out_name)
+    click.echo(f"  -> {out / out_name} ({len(results)} sub-dimensions)")
+
+    # Compute and print summary
+    scores = compute_scores(results)
     click.echo(f"\n{'=' * 50}")
     click.echo(f"Overall Score: {scores['overall_score']}  ({scores['maturity_label']})")
     click.echo(f"{'=' * 50}")
@@ -182,10 +196,9 @@ def assess(input_dir, output_dir, team_name, user_name, model, save_context):
         for sd, lvl in info["sub_dimensions"].items():
             click.echo(f"    {sd}: L{lvl}")
 
-    # Optionally write context file
     if save_context:
-        context_path = out / "assess.context.txt"
-        _write_context(all_results, context_path)
+        context_path = out / f"{team_label}_{user_label}_{today}_context.txt"
+        _write_context(results, context_path)
         click.echo(f"\nContext written to {context_path}")
 
 

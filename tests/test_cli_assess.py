@@ -69,3 +69,33 @@ def test_assess_prints_summary(tmp_path):
             "--output-dir", str(output_dir),
         ])
     assert "Overall" in result.output or "overall" in result.output
+
+def test_assess_merges_multiple_inputs(tmp_path):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    record1 = {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
+        "dimension": "capability", "team": "t", "user": "u", "session_id": "s1",
+        "timestamp": "2026-04-25T10:00:00Z", "source": "claude_session_log",
+        "data": {"prompt_text": "help me"}, "metadata": {}}
+    record2 = {"id": "in-002", "category": "prompts", "sub_dimension": "cicd_integration",
+        "dimension": "integration", "team": "t", "user": "u", "session_id": "s2",
+        "timestamp": "2026-04-26T10:00:00Z", "source": "claude_session_log",
+        "data": {"prompt_text": "fix CI"}, "metadata": {}}
+    (input_dir / "t_u_2026-04-25_session1.jsonl").write_text(json.dumps(record1) + "\n")
+    (input_dir / "t_u_2026-04-26_session2.jsonl").write_text(json.dumps(record2) + "\n")
+    output_dir = tmp_path / "output"
+
+    with patch("ai_maturity.grader.call_claude_judge", return_value=FAKE_JUDGE):
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "assess",
+            "--input-dir", str(input_dir),
+            "--output-dir", str(output_dir),
+        ])
+    assert result.exit_code == 0, result.output
+    output_files = list(output_dir.glob("*_scored.jsonl"))
+    assert len(output_files) == 1
+
+    # Verify merged file was persisted
+    merged_files = list(input_dir.glob("*_merged.jsonl"))
+    assert len(merged_files) == 1
