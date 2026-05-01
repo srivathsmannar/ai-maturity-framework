@@ -43,10 +43,12 @@ Session JSONL → upload → classify & route → assess → grade with Claude �
 ### Install
 
 ```bash
-pip install -e ".[dev]"
+git clone https://github.com/srivathsmannar/ai-maturity-framework.git
+cd ai-maturity-framework
+pip install -e .
 ```
 
-Requires Python 3.9+ and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated.
+This registers the `ai-maturity` CLI command on your system. Requires Python 3.9+ and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated.
 
 ### Run the Full Pipeline
 
@@ -212,7 +214,7 @@ cat data/output/*_context.txt
 ### Run Tests
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]"   # installs pytest
 pytest tests/ -v
 ```
 
