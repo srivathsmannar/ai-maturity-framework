@@ -28,14 +28,14 @@ def test_extract_tool_call():
         "type": "assistant",
         "message": {"role": "assistant", "content": [
             {"type": "tool_use", "name": "Bash", "id": "t1",
-             "input": {"command": "buck2 test //foo", "description": "Run tests"}}
+             "input": {"command": "pytest tests/ -v", "description": "Run tests"}}
         ]},
         "timestamp": "2026-04-25T14:31:00Z", "sessionId": "sess-1"
     }
     result = extract_record(record)
     assert result["record_type"] == "tool_call"
     assert result["data"]["tool_name"] == "Bash"
-    assert result["data"]["input"]["command"] == "buck2 test //foo"
+    assert result["data"]["input"]["command"] == "pytest tests/ -v"
 
 def test_extract_agent_spawn():
     record = {

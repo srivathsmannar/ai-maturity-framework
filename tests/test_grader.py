@@ -12,7 +12,7 @@ SAMPLE_INPUT = [
     {"id": "in-002", "category": "tool_usage", "sub_dimension": "cicd_integration",
      "dimension": "integration", "team": "t", "user": "u", "session_id": "s1",
      "timestamp": "2026-04-25T10:00:05Z", "source": "claude_session_log",
-     "data": {"tool_name": "Bash", "input": {"command": "buck2 test //foo"}}, "metadata": {}},
+     "data": {"tool_name": "Bash", "input": {"command": "pytest tests/ -v"}}, "metadata": {}},
     {"id": "in-003", "category": "prompts", "sub_dimension": "ai_tool_adoption",
      "dimension": "capability", "team": "t", "user": "u", "session_id": "s1",
      "timestamp": "2026-04-25T10:00:10Z", "source": "claude_session_log",
@@ -21,7 +21,7 @@ SAMPLE_INPUT = [
 
 FAKE_JUDGE_RESPONSE = {
     "level": 2, "confidence": "medium",
-    "evidence": ["fix the CI pipeline", "buck2 test"],
+    "evidence": ["fix the CI pipeline", "pytest"],
     "matched_signals": ["CI commands"],
     "reasoning": "Developer references CI and runs test commands."
 }

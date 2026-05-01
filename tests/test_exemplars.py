@@ -4,7 +4,7 @@ from ai_maturity.exemplars import load_exemplars, is_noise
 
 SAMPLE_INPUT = [
     {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
-     "data": {"prompt_text": "use the presto-query skill"}},
+     "data": {"prompt_text": "use the sql-query skill"}},
     {"id": "in-002", "category": "tool_usage", "sub_dimension": "ai_tool_adoption",
      "data": {"tool_name": "Skill", "input": {"skill": "google-docs"}}},
     {"id": "in-003", "category": "tool_usage", "sub_dimension": "ai_tool_adoption",
@@ -46,14 +46,14 @@ def test_filters_xml_task_notifications(tmp_path):
         {"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
          "data": {"prompt_text": "<task-notification><task-id>abc</task-id></task-notification>"}},
         {"id": "in-002", "category": "prompts", "sub_dimension": "ai_tool_adoption",
-         "data": {"prompt_text": "use the presto-query skill"}},
+         "data": {"prompt_text": "use the sql-query skill"}},
     ]
     f = tmp_path / "input.jsonl"
     f.write_text("\n".join(json.dumps(r) for r in records))
     exemplars = load_exemplars(f, max_per_subdim=3)
     texts = [r["data"]["prompt_text"] for r in exemplars["ai_tool_adoption"]]
     assert "<task-notification>" not in str(texts)
-    assert "presto-query" in str(texts)
+    assert "sql-query" in str(texts)
 
 def test_filters_interrupted_requests(tmp_path):
     records = [

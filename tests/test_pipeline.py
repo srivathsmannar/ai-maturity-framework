@@ -10,7 +10,7 @@ SAMPLE_SESSION = [
     {"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "thinking", "thinking": "let me check"},
         {"type": "tool_use", "name": "Bash", "id": "t1",
-         "input": {"command": "buck2 test //foo:bar", "description": "Run tests"}}
+         "input": {"command": "pytest tests/test_foo.py", "description": "Run tests"}}
     ]}, "timestamp": "2026-04-25T10:00:05Z", "sessionId": "s1", "cwd": "/home/alice", "version": "2.1.92"},
     {"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "tool_use", "name": "Agent", "id": "t2",
@@ -48,7 +48,7 @@ def test_process_session_routing(tmp_path):
     session_file = _write_session(SAMPLE_SESSION, tmp_path)
     results = process_session(session_file, team="platform", user="alice")
     sub_dims = [r["sub_dimension"] for r in results]
-    assert "cicd_integration" in sub_dims  # "fix the CI pipeline" prompt AND buck2 test
+    assert "cicd_integration" in sub_dims  # "fix the CI pipeline" prompt AND pytest
     assert "agent_configuration" in sub_dims  # Agent spawn + hook summary
 
 def test_process_session_output_schema(tmp_path):

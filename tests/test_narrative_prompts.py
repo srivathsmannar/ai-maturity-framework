@@ -1,6 +1,6 @@
 from ai_maturity.narrative_prompts import build_dimension_prompt, build_executive_prompt
 
-PROJECT_CONTEXT = "The developer was building a CI demand attribution pipeline using Presto queries and Google Docs."
+PROJECT_CONTEXT = "The developer was building a CI demand attribution pipeline using SQL queries and Google Docs."
 
 FAKE_DIM_DATA = {
     "dimension": "capability",
@@ -8,7 +8,7 @@ FAKE_DIM_DATA = {
     "sub_dimensions": [
         {"sub_dimension": "ai_tool_adoption", "level": 2, "level_label": "Integrated",
          "confidence": "high", "reasoning": "Developer selects specific tools.",
-         "evidence": ["uses presto-query skill"]},
+         "evidence": ["uses sql-query skill"]},
         {"sub_dimension": "prompt_context_engineering", "level": 1, "level_label": "Assisted",
          "confidence": "medium", "reasoning": "Asks basic context questions.",
          "evidence": ["how do i add files as context?"]},
@@ -19,9 +19,9 @@ FAKE_DIM_DATA = {
 }
 
 FAKE_EXEMPLARS = [
-    "use the presto-query skill for this",
+    "use the sql-query skill for this",
     "can you update the google doc?",
-    "run the query in daiquery workspace",
+    "run the query in the notebook",
 ]
 
 FAKE_SCORES = {
@@ -41,7 +41,7 @@ def test_dimension_prompt_contains_project_context():
 
 def test_dimension_prompt_contains_exemplars():
     prompt = build_dimension_prompt(FAKE_DIM_DATA, PROJECT_CONTEXT, FAKE_EXEMPLARS)
-    assert "presto-query" in prompt
+    assert "sql-query" in prompt
     assert "google doc" in prompt
 
 def test_dimension_prompt_asks_contextual_questions():

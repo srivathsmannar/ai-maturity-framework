@@ -276,7 +276,7 @@ Measures: Is AI connected to build, test, and deployment systems?
 
 *Real example from session:*
 ```
-Bash: "buck2 test //path:target && jf submit --draft"
+Bash: "pytest tests/ && gh pr create --draft"
 Agent: description="Run Citadel target query"
 Agent: description="Run JSON parsing query"  
 ```
@@ -337,7 +337,7 @@ Measures: Do interactions reference tickets/issues? Are requirements connected t
 
 *Real example from session:*
 ```
-Prompt: "this is all a bit too complex. all i need is a query that breaks down ABM CI Demand by PA. https://www.internalfb.com/tasks/?t=260669092"
+Prompt: "this is all a bit too complex. all i need is a query that breaks down CI demand by team. https://linear.app/team/issue/ENG-1234"
 ```
 
 *Pattern*: Developer grounds AI work in tracked tasks. Implementation connects back to requirements.
@@ -412,7 +412,7 @@ Measures: Does the session interact with multiple external systems? Is data pull
 *Real example from session:*
 ```
 WebFetch: "https://docs.google.com/document/d/1hw.../export?format=txt"
-Skill: "presto-query" (Hive/Presto data system)
+Skill: "sql-query" (SQL data warehouse)
 Skill: "wiki-query" (internal wiki)
 ```
 
@@ -434,8 +434,8 @@ Skill: "wiki-query" (internal wiki)
 *Real example from session:*
 ```
 Skill: "google-docs" → Create new document
-Skill: "presto-query" → Run CI demand query  
-Skill: "daiquery" → Run queries in DaiQuery workspace
+Skill: "sql-query" → Run CI demand query  
+Skill: "notebook" → Run queries in query notebook
 Skill: "wiki-query" → Read Citadel docs
 Agent: "Combine Google Docs into one"
 ```

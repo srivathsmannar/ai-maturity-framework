@@ -23,7 +23,7 @@ def _make_scored_and_input(tmp_path):
         "\n".join(json.dumps(r) for r in scored))
 
     inp = [{"id": "in-001", "category": "prompts", "sub_dimension": "ai_tool_adoption",
-            "data": {"prompt_text": "use the presto skill"}}]
+            "data": {"prompt_text": "use the sql-query skill"}}]
     (input_dir / "platform_alice_input.jsonl").write_text(
         "\n".join(json.dumps(r) for r in inp))
 
@@ -59,8 +59,8 @@ def test_report_md_content(tmp_path):
             ])
     md_file = list(output_dir.glob("*.md"))[0]
     content = md_file.read_text()
-    assert "AI Maturity Assessment Report" in content
-    assert "Executive Summary" in content
+    assert "AI Maturity Assessment" in content
+    assert "Overall Maturity" in content
 
 def test_report_prints_path(tmp_path):
     scored_dir, input_dir = _make_scored_and_input(tmp_path)
