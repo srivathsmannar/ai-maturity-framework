@@ -89,32 +89,28 @@ def report(scored_dir, input_dir, output_dir, team_name, user_name, model):
         click.echo(f"No scored JSONL files found in {scored}")
         return
 
-    # Find input JSONL files
+    # Prefer the merged scored file from assess; fall back to most recent
+    merged_scored = [f for f in scored_files if "_all_" in f.name or "merged" in f.name]
+    scored_file = merged_scored[-1] if merged_scored else scored_files[-1]
+
+    # Find matching merged input file, fall back to any input file
     input_files = sorted(inp.glob("*.jsonl"))
+    merged_inputs = [f for f in input_files if "_merged" in f.name]
+    matching_input = merged_inputs[-1] if merged_inputs else (input_files[0] if input_files else None)
+
+    if matching_input is None:
+        click.echo(f"No input JSONL files found in {inp}")
+        return
 
     out.mkdir(parents=True, exist_ok=True)
 
-    for scored_file in scored_files:
-        # Find matching input file by stem substring matching
-        stem = scored_file.stem.replace("_scored", "")
-        matching_input = None
-        for inf in input_files:
-            if stem in inf.stem or inf.stem in stem:
-                matching_input = inf
-                break
-
-        if matching_input is None and input_files:
-            click.echo(f"  Warning: no exact input match for {scored_file.name}, using {input_files[0].name}")
-            matching_input = input_files[0]
-
-        if matching_input is None:
-            click.echo(f"  Warning: no input files available for {scored_file.name}, skipping")
-            continue
-
-        md_content = generate_report(scored_file, matching_input, model=model)
-        out_path = out / f"{stem}_report.md"
-        out_path.write_text(md_content)
-        click.echo(f"Report written to {out_path}")
+    click.echo(f"Generating report for {scored_file.name}...")
+    click.echo(f"  Using input: {matching_input.name}")
+    md_content = generate_report(scored_file, matching_input, model=model)
+    stem = scored_file.stem.replace("_scored", "")
+    out_path = out / f"{stem}_report.md"
+    out_path.write_text(md_content)
+    click.echo(f"  Report written to {out_path}")
 
 
 @cli.command()

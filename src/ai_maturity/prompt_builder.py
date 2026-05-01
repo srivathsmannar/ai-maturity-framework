@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 
-def _format_record(record: dict) -> str:
+def format_record(record: dict) -> str:
     """Format a single evidence record into a readable one-line summary."""
     category = record.get("category", "unknown")
     data = record.get("data", {})
@@ -63,7 +63,7 @@ def _truncate_evidence(records: list[dict], max_chars: int = 30000) -> str:
     lines: list[str] = []
     total = 0
     for rec in records:
-        line = _format_record(rec)
+        line = format_record(rec)
         if total + len(line) + 1 > max_chars:
             lines.append("... (evidence truncated)")
             break
@@ -139,7 +139,7 @@ outstanding action does not justify a higher level if most behavior is lower.
 
 Return a JSON object with the following fields:
 - "sub_dimension": "{sub_dimension}"
-- "level": the maturity level you assign (e.g. "L1", "L2", "L3", or "L4")
+- "level": integer maturity level (1, 2, 3, or 4)
 - "confidence": "high", "medium", or "low"
 - "evidence": list of evidence items that support your grade
 - "matched_signals": list of rubric signals matched by the evidence

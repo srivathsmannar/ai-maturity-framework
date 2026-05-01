@@ -37,14 +37,16 @@ Dimension average: {avg}
 
 ## Writing Instructions
 
-Write a 3-5 sentence narrative paragraph that:
-1. Connects the developer's maturity to what they were actually building — don't just list scores
-2. Weaves in 1-2 direct quotes from their prompts as evidence (use quotation marks)
-3. Explains WHY their level is what it is given the project context — was a low score because they didn't need that capability, or because they missed an opportunity?
-4. Gives one specific, actionable recommendation tied to their actual project work
+Write 2-3 short paragraphs (separated by blank lines) that:
+
+Paragraph 1: Connect the developer's maturity to what they were actually building. Weave in 1-2 direct quotes from their prompts as evidence (use quotation marks). Don't just list scores.
+
+Paragraph 2: Explain WHY their levels are what they are given the project context. Was a low score because they didn't need that capability for this project, or because they missed an opportunity?
+
+Paragraph 3: Give one specific, actionable recommendation tied to their actual project work.
 
 Write in second person ("You demonstrated...", "When you asked...").
-Conversational, direct, human tone. No bullet points, no headers — just prose.
+Conversational, direct, human tone. No bullet points, no headers — just prose paragraphs.
 Do NOT just restate the scores — interpret them in context."""
 
 

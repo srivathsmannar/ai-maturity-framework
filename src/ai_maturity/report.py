@@ -60,6 +60,8 @@ def generate_report(
     by_dim = _group_by_dimension(scored)
 
     # Extract project context from input prompts
+    import sys
+    print("  Extracting project context...", file=sys.stderr, flush=True)
     project_context = extract_project_context(input_path, model)
 
     # Load exemplars keyed by sub-dimension
@@ -67,20 +69,18 @@ def generate_report(
 
     sections: list[str] = []
 
-    # Header
-    sections.append(_render_header(meta, scores))
-
-    # Project Context section
-    sections.append(_render_project_context(project_context))
-
-    # Executive summary
+    # Header + opening (project context + score matrix + executive narrative)
+    print("  Writing executive summary...", file=sys.stderr, flush=True)
     exec_prompt = build_executive_prompt(scores, meta["user"], meta["team"], project_context)
     exec_narrative = call_claude_writer(exec_prompt, model) or _PLACEHOLDER_EXEC
-    sections.append(_render_executive_summary(scores, exec_narrative))
+    sections.append(_render_header(meta, scores))
+    sections.append(_render_opening(scores, project_context, exec_narrative, scored))
 
     # Dimension sections
     dim_narratives: dict[str, str] = {}
     for dim in DIMENSIONS:
+        display = _DIM_DISPLAY.get(dim, dim)
+        print(f"  Writing {display} narrative...", file=sys.stderr, flush=True)
         sub_results = by_dim.get(dim, [])
         dim_data = _build_dim_data(dim, sub_results, scores)
 
@@ -191,44 +191,68 @@ def _level_int(score: float) -> int:
         return 4
 
 
+_SD_DISPLAY = {
+    "ai_tool_adoption": "AI Tool Adoption",
+    "prompt_context_engineering": "Prompt & Context Engineering",
+    "agent_configuration": "Agent Configuration",
+    "cicd_integration": "CI/CD Integration",
+    "ticketing_planning": "Ticketing & Planning",
+    "cross_system_connectivity": "Cross-System Connectivity",
+    "quality_controls": "Quality Controls",
+    "security_compliance": "Security & Compliance",
+    "measurement_kpis": "Measurement & KPIs",
+    "ways_of_working": "Ways of Working",
+    "accountability_ownership": "Accountability & Ownership",
+    "scalability_knowledge_transfer": "Scalability & Knowledge Transfer",
+}
+
+
 def _render_header(meta: dict, scores: dict) -> str:
     """Render the report header with name, team, date."""
     assessed = meta["assessed_at"]
     if "T" in assessed:
         assessed = assessed.split("T")[0]
     return (
-        f"# AI Maturity Assessment Report\n\n"
-        f"**Name**: {meta['user']} | **Team**: {meta['team']} | **Date**: {assessed}\n\n"
-        f"---\n"
+        f"# AI Maturity Assessment: {meta['user']}\n\n"
+        f"**Team**: {meta['team']} | **Date**: {assessed}\n"
     )
 
 
-def _render_project_context(project_context: str) -> str:
-    """Render the project context section."""
-    return f"\n## Project Context\n\n{project_context}\n"
-
-
-def _render_executive_summary(scores: dict, narrative: str) -> str:
-    """Render the executive summary section with score table and narrative."""
+def _render_opening(scores: dict, project_context: str, narrative: str, scored: list) -> str:
+    """Render the opening section: project context flows into score matrix and executive narrative."""
     overall = scores["overall_score"]
     label = scores["maturity_label"]
 
     lines = [
-        f"\n## Executive Summary\n",
-        f"**Overall Score: {overall} — {label}**\n",
-        "| Dimension | Score | Level |",
-        "|-----------|-------|-------|",
+        "",
+        project_context,
+        "",
+        f"**Overall Maturity: {overall} — {label}**",
+        "",
     ]
 
-    for dim in DIMENSIONS:
-        dim_info = scores["dimensions"].get(dim, {"average": 1.0})
-        avg = dim_info["average"]
-        lvl = _level_label(avg)
-        display = _DIM_DISPLAY.get(dim, dim)
-        lines.append(f"| {display} | {avg} | {lvl} |")
+    # Full score matrix — dimensions as rows, sub-dimensions nested
+    lines.append("| Dimension | Sub-Dimension | Level | Confidence |")
+    lines.append("|-----------|---------------|-------|------------|")
 
-    lines.append(f"\n{narrative}\n")
-    lines.append("---\n")
+    by_sd = {r["sub_dimension"]: r for r in scored}
+    for dim, sds in DIMENSIONS.items():
+        display = _DIM_DISPLAY.get(dim, dim)
+        dim_avg = scores["dimensions"].get(dim, {}).get("average", 1.0)
+        dim_lvl = _level_label(dim_avg)
+        lines.append(f"| **{display}** ({dim_lvl}) | | | |")
+        for sd in sds:
+            sd_display = _SD_DISPLAY.get(sd, sd)
+            r = by_sd.get(sd, {})
+            lvl = r.get("level", 1)
+            conf = r.get("confidence", "low")
+            lines.append(f"| | {sd_display} | L{lvl} | {conf} |")
+
+    lines.append("")
+    lines.append(narrative)
+    lines.append("")
+    lines.append("---")
+    lines.append("")
     return "\n".join(lines)
 
 
