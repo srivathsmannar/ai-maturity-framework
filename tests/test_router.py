@@ -91,3 +91,27 @@ def test_tool_call_task_create():
 
 def test_skill_sql_query():
     assert route_record("skill_invocation", {"tool_name": "Skill", "input": {"skill": "sql-query"}}) == "cross_system_connectivity"
+
+
+def test_mcp_jira_routes_to_ticketing():
+    assert route_record("tool_call", {"tool_name": "mcp__jira__create_issue", "input": {}}) == "ticketing_planning"
+
+
+def test_mcp_linear_routes_to_ticketing():
+    assert route_record("tool_call", {"tool_name": "mcp__linear__list_issues", "input": {}}) == "ticketing_planning"
+
+
+def test_mcp_grafana_routes_to_measurement():
+    assert route_record("tool_call", {"tool_name": "mcp__grafana__query_dashboard", "input": {}}) == "measurement_kpis"
+
+
+def test_mcp_sentry_routes_to_measurement():
+    assert route_record("tool_call", {"tool_name": "mcp__sentry__get_issues", "input": {}}) == "measurement_kpis"
+
+
+def test_mcp_postgres_routes_to_cross_system():
+    assert route_record("tool_call", {"tool_name": "mcp__postgres__query", "input": {}}) == "cross_system_connectivity"
+
+
+def test_mcp_slack_routes_to_cross_system():
+    assert route_record("tool_call", {"tool_name": "mcp__slack__post_message", "input": {}}) == "cross_system_connectivity"

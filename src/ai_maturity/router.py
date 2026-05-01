@@ -210,8 +210,13 @@ def _route_tool_call(data: dict) -> str:
     if tool_name == "Agent":
         return "agent_configuration"
 
-    # MCP tools
+    # MCP tools — route by server name when possible
     if tool_name.startswith("mcp__"):
+        mcp_lower = tool_name.lower()
+        if any(t in mcp_lower for t in ("jira", "linear", "asana", "trello")):
+            return "ticketing_planning"
+        if any(t in mcp_lower for t in ("grafana", "datadog", "sentry", "prometheus")):
+            return "measurement_kpis"
         return "cross_system_connectivity"
 
     # Web tools

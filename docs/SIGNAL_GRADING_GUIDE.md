@@ -140,7 +140,7 @@ Route based on **tool name and input content**:
 | `Write`/`Edit` | Route by file path | Otherwise route based on what the file relates to |
 | `ToolSearch` | Skip | Infrastructure plumbing, not a maturity signal |
 | `TaskCreate`/`TaskUpdate`/etc. | `ticketing_planning` | Task management = planning workflow |
-| `mcp__*` | `cross_system_connectivity` | MCP tool use = cross-system integration |
+| `mcp__*` | `cross_system_connectivity` | MCP tool use = cross-system integration (e.g., `mcp__postgres`, `mcp__github`, `mcp__slack`, `mcp__linear`, `mcp__jira`, `mcp__notion`, `mcp__sentry`) |
 | `WebFetch`/`WebSearch` | `cross_system_connectivity` | External system access |
 | `AskUserQuestion` | Skip | Clarification plumbing |
 
@@ -324,9 +324,9 @@ For each sub-dimension, the grader collects all records routed to it and determi
 - L4: Bi-directional sync ("when JIRA status changes, update GitHub PR labels")
 
 **Supporting signals** (from tool records):
-- MCP tool calls (`mcp__*`) — cross-system by definition
-- WebFetch to external URLs (Google Docs, internal wikis, APIs)
-- Bash with `gh`, `git` (source control and collaboration)
+- MCP tool calls (`mcp__*`) — cross-system by definition. Common MCP servers: `postgres` (database), `github` (PRs/issues), `slack` (messaging), `linear`/`jira` (ticketing), `notion`/`confluence` (docs), `sentry` (error tracking), `grafana` (monitoring)
+- WebFetch to external URLs (Google Docs, wikis, APIs)
+- Bash with `gh`, `git`, `docker`, `curl` (source control, containers, APIs)
 - Multiple distinct system integrations in one session
 
 **Noise (ignore)**:

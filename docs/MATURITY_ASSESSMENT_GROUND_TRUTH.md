@@ -404,7 +404,8 @@ Measures: Does the session interact with multiple external systems? Is data pull
 - Developer points AI at multiple system endpoints
 
 *Tool evidence:*
-- WebFetch to Google Docs, wiki pages, or internal URLs
+- MCP tools for reading: `mcp__postgres` (database), `mcp__github` (PRs/issues), `mcp__notion` (docs), `mcp__slack` (messages)
+- WebFetch to Google Docs, wiki pages, or external URLs
 - Bash with `gh` commands (source control system)
 - 2-3 distinct external system interactions
 
@@ -425,8 +426,8 @@ Skill: "wiki-query" (internal wiki)
 - "run the queries in the doc inside this query notebook" (data flows between systems)
 
 *Tool evidence:*
-- MCP tools for both read AND write (Google Docs create + edit)
-- Data flows between systems: query result → Google Doc, .md file → Google Doc
+- MCP tools for both read AND write: `mcp__postgres` (query) + `mcp__notion` (write results), `mcp__github` (read PR) + `mcp__jira` (update ticket), `mcp__slack` (post summary)
+- Data flows between systems: query result → Google Doc, database → Notion, GitHub PR → Jira ticket
 - 4+ distinct system integrations
 - Agent spawned for cross-system task: `Agent(description="Combine Google Docs into one")`
 
@@ -614,7 +615,7 @@ Measures: Are AI outcomes measured? Do prompts reference metrics, dashboards, or
 - Developer asks about or references specific metrics
 
 *Tool evidence:*
-- Grafana/Datadog/dashboard queries about AI usage data
+- MCP tools: `mcp__grafana` (dashboard queries), `mcp__sentry` (error tracking), Datadog API via WebFetch
 - Bash commands that query session counts or usage stats
 
 *Pattern*: Developer thinks about AI effectiveness in measurable terms.
