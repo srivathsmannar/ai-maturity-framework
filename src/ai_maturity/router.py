@@ -9,15 +9,15 @@ from typing import Dict
 # ---------------------------------------------------------------------------
 _SKILL_ROUTES: Dict[str, set[str]] = {
     "cross_system_connectivity": {
-        "presto-query", "daiquery", "scuba", "datamate",
-        "google-docs", "wiki-query", "scuba_cli",
+        "sql-query", "notebook", "analytics", "data-explorer",
+        "google-docs", "docs-search", "analytics-cli",
     },
     "cicd_integration": {
-        "ci-signals", "fix-diff", "continuous-integration-data",
+        "ci-signals", "fix-diff", "ci-data",
     },
     "quality_controls": {
         "review-diff", "code-reviewer", "simplify",
-        "auto-review-diff", "team-review",
+        "auto-review-diff", "peer-review",
     },
     "ticketing_planning": {
         "tasks", "diff-search",
@@ -26,7 +26,7 @@ _SKILL_ROUTES: Dict[str, set[str]] = {
         "security-review", "agent-security-guardrails",
     },
     "measurement_kpis": {
-        "ods-counter-analyzer", "metric360", "ods-helper", "ods-cli",
+        "grafana-metrics", "datadog", "prometheus-helper", "metrics-cli",
     },
     "prompt_context_engineering": {
         "init",
@@ -104,7 +104,7 @@ _CROSS_SYSTEM_TERMS = [
 # Bash command regex patterns for tool-call routing
 # ---------------------------------------------------------------------------
 _BASH_CI_RE = re.compile(
-    r"buck2 test|pytest|npm test|jest|jf submit|gh pr|git push",
+    r"pytest|npm\s+test|jest|make\s+test|gh\s+pr|git push",
     re.IGNORECASE,
 )
 _BASH_LINT_RE = re.compile(
@@ -112,7 +112,7 @@ _BASH_LINT_RE = re.compile(
     re.IGNORECASE,
 )
 _BASH_CROSS_RE = re.compile(
-    r"\bjf\b|\bgh\b|\bsl\b|\bhg\b|\bcurl\b|\bmeta\b",
+    r"\bgh\b|\bcurl\s|\bdocker\s",
     re.IGNORECASE,
 )
 _BASH_CONTEXT_RE = re.compile(
@@ -195,7 +195,7 @@ def _route_skill(data: dict) -> str:
     inp = data.get("input") or {}
     if isinstance(inp, dict):
         skill_name = inp.get("skill", "")
-    # Handle namespaced skills: "10x-engineer:code-reviewer" -> "code-reviewer"
+    # Handle namespaced skills: "workflow:code-reviewer" -> "code-reviewer"
     if ":" in skill_name:
         skill_name = skill_name.split(":", 1)[1]
 

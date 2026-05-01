@@ -46,7 +46,7 @@ def test_skill_ci_signals():
 
 
 def test_skill_namespaced():
-    assert route_record("skill_invocation", {"tool_name": "Skill", "input": {"skill": "10x-engineer:code-reviewer"}}) == "quality_controls"
+    assert route_record("skill_invocation", {"tool_name": "Skill", "input": {"skill": "workflow:code-reviewer"}}) == "quality_controls"
 
 
 def test_skill_generic():
@@ -58,7 +58,7 @@ def test_tool_call_agent():
 
 
 def test_tool_call_bash_test():
-    assert route_record("tool_call", {"tool_name": "Bash", "input": {"command": "buck2 test //path:target"}}) == "cicd_integration"
+    assert route_record("tool_call", {"tool_name": "Bash", "input": {"command": "pytest tests/ -v"}}) == "cicd_integration"
 
 
 def test_tool_call_bash_lint():
@@ -87,3 +87,7 @@ def test_tool_call_webfetch():
 
 def test_tool_call_task_create():
     assert route_record("tool_call", {"tool_name": "TaskCreate", "input": {"subject": "Fix bug"}}) == "ticketing_planning"
+
+
+def test_skill_sql_query():
+    assert route_record("skill_invocation", {"tool_name": "Skill", "input": {"skill": "sql-query"}}) == "cross_system_connectivity"
