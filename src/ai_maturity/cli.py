@@ -6,183 +6,85 @@ from pathlib import Path
 
 import click
 
+from ai_maturity.store import Store
+
+
+def _get_store(db: str | None) -> Store:
+    """Create a Store with an optional custom db path."""
+    if db:
+        return Store(Path(db))
+    return Store()
+
 
 @click.group()
 def cli():
-    """AI Maturity Framework — assess and track AI adoption maturity across your team."""
+    """AI Maturity Framework -- assess and track AI adoption maturity across your team."""
     pass
 
 
 @cli.command()
-@click.argument('logs_path', type=click.Path(exists=True))
-@click.option('--team-name', default="unknown", help='Team name')
-@click.option('--user-name', default="unknown", help='User name')
-@click.option('--output-dir', type=click.Path(), default=None,
-              help='Output directory for assessment-input JSONL (default: data/input/)')
-def upload(logs_path, team_name, user_name, output_dir):
-    """
-    Extract and classify Claude Code session logs for assessment.
+@click.argument("logs_path", type=click.Path(exists=True))
+@click.option("--name", required=True, help="Developer name")
+@click.option("--team", required=True, help="Team name")
+@click.option("--db", default=None, hidden=True, help="Override database path")
+def submit(logs_path: str, name: str, team: str, db: str | None) -> None:
+    """Extract session logs and save to store.
 
-    LOGS_PATH: Path to directory containing session .jsonl files
-
-    Example:
-        ai-maturity upload ~/.claude/projects/myapp --team-name myteam --user-name alice
+    LOGS_PATH: Directory containing .jsonl session files.
     """
-    from datetime import date
-    from pathlib import Path
-    from ai_maturity.pipeline import process_session, write_output
+    from ai_maturity.pipeline import process_session
 
     logs = Path(logs_path)
-    out = Path(output_dir) if output_dir else Path("data/input")
-
     session_files = sorted(logs.glob("*.jsonl"))
     if not session_files:
         click.echo(f"No .jsonl files found in {logs_path}")
         return
 
-    total_records = 0
+    all_records: list[dict] = []
     for session_file in session_files:
-        results = process_session(session_file, team=team_name, user=user_name)
-        if not results:
-            continue
-        today = date.today().isoformat()
-        out_name = f"{team_name}_{user_name}_{today}_{session_file.stem[:8]}.jsonl"
-        write_output(results, out / out_name)
-        total_records += len(results)
-        click.echo(f"  {session_file.name}: {len(results)} records extracted")
+        results = process_session(session_file, team=team, user=name)
+        if results:
+            all_records.extend(results)
+            click.echo(f"  {session_file.name}: {len(results)} records")
 
-    click.echo(f"\nDone. {total_records} records from {len(session_files)} sessions -> {out}/")
+    store = _get_store(db)
+    store.save_developer(name, team)
+    store.save_records(name, all_records)
 
-
-@cli.command()
-@click.option('--scored-dir', type=click.Path(exists=True), default='data/output/',
-              help='Directory containing scored JSONL from assess (default: data/output/)')
-@click.option('--input-dir', type=click.Path(exists=True), default='data/input/',
-              help='Directory containing input JSONL from upload (default: data/input/)')
-@click.option('--output-dir', type=click.Path(), default='reports/',
-              help='Output directory for report files (default: reports/)')
-@click.option('--team-name', default=None, help='Filter by team name')
-@click.option('--user-name', default=None, help='Filter by user name')
-@click.option('--model', default='sonnet', help='Claude model for narrative writing')
-def report(scored_dir, input_dir, output_dir, team_name, user_name, model):
-    """
-    Generate an AI maturity report from scored assessment data.
-
-    Example:
-        ai-maturity report --scored-dir data/output/ --input-dir data/input/
-        ai-maturity report --team-name myteam --user-name alice
-    """
-    from ai_maturity.report import generate_report
-
-    scored = Path(scored_dir)
-    inp = Path(input_dir)
-    out = Path(output_dir)
-
-    # Find scored JSONL files, optionally filtered by team/user
-    scored_files = sorted(scored.glob("*_scored.jsonl"))
-    if team_name:
-        scored_files = [f for f in scored_files if team_name in f.name]
-    if user_name:
-        scored_files = [f for f in scored_files if user_name in f.name]
-
-    if not scored_files:
-        click.echo(f"No scored JSONL files found in {scored}")
-        return
-
-    # Prefer the merged scored file from assess; fall back to most recent
-    merged_scored = [f for f in scored_files if "_all_" in f.name or "merged" in f.name]
-    scored_file = merged_scored[-1] if merged_scored else scored_files[-1]
-
-    # Find matching merged input file, fall back to any input file
-    input_files = sorted(inp.glob("*.jsonl"))
-    merged_inputs = [f for f in input_files if "_merged" in f.name]
-    matching_input = merged_inputs[-1] if merged_inputs else (input_files[0] if input_files else None)
-
-    if matching_input is None:
-        click.echo(f"No input JSONL files found in {inp}")
-        return
-
-    out.mkdir(parents=True, exist_ok=True)
-
-    click.echo(f"Generating report for {scored_file.name}...")
-    click.echo(f"  Using input: {matching_input.name}")
-    md_content = generate_report(scored_file, matching_input, model=model)
-    stem = scored_file.stem.replace("_scored", "")
-    out_path = out / f"{stem}_report.md"
-    out_path.write_text(md_content)
-    click.echo(f"  Report written to {out_path}")
+    click.echo(f"\nSubmitted {len(all_records)} records for {name} (team: {team})")
 
 
 @cli.command()
-@click.option('--input-dir', type=click.Path(), default='data/input/',
-              help='Directory containing assessment-input JSONL from upload (default: data/input/)')
-@click.option('--output-dir', type=click.Path(), default='data/output/',
-              help='Scored output directory (default: data/output/)')
-@click.option('--team-name', default=None, help='Filter input files by team name')
-@click.option('--user-name', default=None, help='Filter input files by user name')
-@click.option('--model', default='sonnet', help='Claude model to use (default: sonnet)')
-@click.option('--save-context', is_flag=True, default=False,
-              help='Write a .context.txt file showing grading details')
-def assess(input_dir, output_dir, team_name, user_name, model, save_context):
-    """
-    Run a prompt-quality AI maturity assessment for a developer.
+@click.argument("name")
+@click.option("--model", default="sonnet", help="Claude model for grading")
+@click.option("--db", default=None, hidden=True, help="Override database path")
+def assess(name: str, model: str, db: str | None) -> None:
+    """Grade a developer's sessions and save scores.
 
-    Scores all 12 maturity sub-dimensions by analyzing actual developer prompts
-    via Claude. Produces scored JSONL output with dimension-by-dimension
-    analysis.
-
-    Example:
-        ai-maturity assess --input-dir data/input/ --output-dir data/output/
-        ai-maturity assess --team-name myteam --user-name alice --save-context
+    NAME: Developer name (must have been submitted first).
     """
     from ai_maturity.grader import grade_session
-    from ai_maturity.pipeline import write_output
     from ai_maturity.scorer import compute_scores
 
-    inp = Path(input_dir)
-    out = Path(output_dir)
-    ground_truth_path = Path(__file__).parent.parent.parent / "docs" / "MATURITY_ASSESSMENT_GROUND_TRUTH.md"
+    store = _get_store(db)
 
-    # Find input JSONL files, optionally filtered by team/user
-    input_files = sorted(inp.glob("*.jsonl"))
-    if team_name:
-        input_files = [f for f in input_files if team_name in f.name]
-    if user_name:
-        input_files = [f for f in input_files if user_name in f.name]
-
-    if not input_files:
-        click.echo(f"No input JSONL files found in {inp}")
+    dev = store.get_developer(name)
+    if dev is None:
+        click.echo(f"Developer '{name}' not found. Run submit first.")
         return
 
-    from datetime import date as date_cls
+    ground_truth_path = (
+        Path(__file__).parent.parent.parent / "docs" / "MATURITY_ASSESSMENT_GROUND_TRUTH.md"
+    )
 
-    today = date_cls.today().isoformat()
-    team_label = team_name or "all"
-    user_label = user_name or "all"
+    tmp_input = store.write_records_jsonl(name)
+    try:
+        results = grade_session(tmp_input, ground_truth_path, model=model)
+    finally:
+        tmp_input.unlink(missing_ok=True)
 
-    # Merge all input files into one combined file
-    merged_name = f"{team_label}_{user_label}_{today}_merged.jsonl"
-    merged_path = inp / merged_name
-    merged_path.parent.mkdir(parents=True, exist_ok=True)
-    record_count = 0
-    with open(merged_path, "w") as out_f:
-        for input_file in input_files:
-            with open(input_file) as in_f:
-                for line in in_f:
-                    out_f.write(line)
-                    record_count += 1
+    store.save_scores(name, results)
 
-    click.echo(f"Merged {len(input_files)} input files ({record_count} records) -> {merged_path.name}")
-    click.echo("Grading...")
-
-    results = grade_session(merged_path, ground_truth_path, model=model)
-
-    # Write single scored output
-    out_name = f"{team_label}_{user_label}_{today}_scored.jsonl"
-    write_output(results, out / out_name)
-    click.echo(f"  -> {out / out_name} ({len(results)} sub-dimensions)")
-
-    # Compute and print summary
     scores = compute_scores(results)
     click.echo(f"\n{'=' * 50}")
     click.echo(f"Overall Score: {scores['overall_score']}  ({scores['maturity_label']})")
@@ -192,35 +94,82 @@ def assess(input_dir, output_dir, team_name, user_name, model, save_context):
         for sd, lvl in info["sub_dimensions"].items():
             click.echo(f"    {sd}: L{lvl}")
 
-    if save_context:
-        context_path = out / f"{team_label}_{user_label}_{today}_context.txt"
-        _write_context(results, context_path)
-        click.echo(f"\nContext written to {context_path}")
+
+@cli.command()
+@click.argument("name")
+@click.option("--model", default="sonnet", help="Claude model for narrative writing")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["md", "html", "both"]),
+    default="both",
+    help="Output format (default: both)",
+)
+@click.option("--output-dir", type=click.Path(), default=None, help="Override output directory")
+@click.option("--db", default=None, hidden=True, help="Override database path")
+def report(name: str, model: str, output_format: str, output_dir: str | None, db: str | None) -> None:
+    """Generate an AI maturity report from scored data.
+
+    NAME: Developer name (must have been assessed first).
+    """
+    from ai_maturity.report import generate_report
+
+    store = _get_store(db)
+
+    dev = store.get_developer(name)
+    if dev is None:
+        click.echo(f"Developer '{name}' not found.")
+        return
+
+    scores = store.get_scores(name)
+    if not scores:
+        click.echo(f"No scores found for '{name}'. Run assess first.")
+        return
+
+    out = Path(output_dir) if output_dir else store.reports_dir()
+    out.mkdir(parents=True, exist_ok=True)
+
+    tmp_scored = store.write_scores_jsonl(name)
+    tmp_input = store.write_records_jsonl(name)
+    try:
+        md_content = generate_report(tmp_scored, tmp_input, model=model)
+    finally:
+        tmp_scored.unlink(missing_ok=True)
+        tmp_input.unlink(missing_ok=True)
+
+    if output_format in ("md", "both"):
+        md_path = out / f"{name}_report.md"
+        md_path.write_text(md_content)
+        click.echo(f"  Markdown: {md_path}")
+
+    if output_format in ("html", "both"):
+        from ai_maturity.html_report import md_to_html
+
+        md_path = out / f"{name}_report.md"
+        if not md_path.exists():
+            md_path.write_text(md_content)
+        html_path = out / f"{name}_report.html"
+        md_to_html(md_path, html_path)
+        click.echo(f"  HTML: {html_path}")
 
 
-@cli.command(name="list-uploads")
-@click.option('--team-name', default=None)
-@click.option('--user-name', default=None)
-def list_uploads(team_name, user_name):
-    """List all uploaded log sets."""
-    raise NotImplementedError
+@cli.command(name="list")
+@click.option("--db", default=None, hidden=True, help="Override database path")
+def list_developers(db: str | None) -> None:
+    """Show all developers in the store."""
+    store = _get_store(db)
+    devs = store.list_developers()
 
+    if not devs:
+        click.echo("No developers found.")
+        return
 
-@cli.command(name="list-reports")
-@click.option('--team-name', default=None)
-@click.option('--user-name', default=None)
-def list_reports(team_name, user_name):
-    """List all generated reports."""
-    raise NotImplementedError
-
-
-@cli.command(name="open-report")
-@click.option('--team-name', default=None)
-@click.option('--user-name', default=None)
-@click.option('--id', 'report_id', default=None, type=int, help='Report ID from list-reports')
-def open_report(team_name, user_name, report_id):
-    """Open the most recent report in the system viewer."""
-    raise NotImplementedError
+    click.echo(f"{'Name':<20} {'Team':<15} {'Submitted':<25} {'Scored'}")
+    click.echo("-" * 70)
+    for d in devs:
+        submitted = d["submitted_at"][:19] if d["submitted_at"] else ""
+        scored = "yes" if d["has_scores"] else "no"
+        click.echo(f"{d['name']:<20} {d['team']:<15} {submitted:<25} {scored}")
 
 
 def _write_context(results: list[dict], path: Path) -> None:
@@ -248,5 +197,5 @@ def _write_context(results: list[dict], path: Path) -> None:
         f.write("\n".join(lines))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
