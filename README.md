@@ -53,87 +53,89 @@ This registers the `ai-maturity` CLI command on your system. Requires Python 3.9
 ### Run the Full Pipeline
 
 ```bash
-# 1. Extract session logs (fast, no Claude calls)
-ai-maturity upload ~/.claude/projects/my-project/ --team-name myteam --user-name alice --output-dir data/input
+# 1. Submit session logs (fast, no Claude calls)
+ai-maturity submit ~/.claude/projects/my-project/ --name alice --team platform
 
 # 2. Grade maturity (12 Claude calls, ~2 min)
-ai-maturity assess --input-dir data/input/ --output-dir data/output/ --model sonnet
+ai-maturity assess alice
 
 # 3. Generate report (6 Claude calls, ~1 min)
-ai-maturity report --scored-dir data/output/ --input-dir data/input/ --output-dir reports/
+ai-maturity report alice
 
-# 4. View report
-open reports/*.md
+# 4. See all developers
+ai-maturity list
 ```
+
+Reports are saved to `~/.ai-maturity/reports/`. All data is stored in `~/.ai-maturity/store.db`.
 
 ### CLI Reference
 
-#### `ai-maturity upload <LOGS_PATH>`
+#### `ai-maturity submit <LOGS_PATH>`
 
-Extracts records from Claude Code session JSONL files and routes each to one of 12 sub-dimensions.
+Extracts records from Claude Code session JSONL files, classifies and routes each to one of 12 sub-dimensions, and saves them to the local store.
 
 | Option | Default | Description |
 |---|---|---|
-| `--team-name` | `unknown` | Team name for the developer |
-| `--user-name` | `unknown` | Developer's name |
-| `--output-dir` | `data/input/` | Where to write assessment-input JSONL |
+| `--name` | (required) | Developer name |
+| `--team` | (required) | Team name |
 
 **Input**: A directory containing `*.jsonl` session files (e.g., `~/.claude/projects/my-project/`)
 
-**Output**: One JSONL file per session in `data/input/`, with each record tagged with `sub_dimension` and `dimension`.
+Re-submitting for the same name replaces previous records.
 
-#### `ai-maturity assess`
+#### `ai-maturity assess <NAME>`
 
-Merges all input files and grades each sub-dimension using Claude as an LLM judge.
+Grades a developer's AI maturity across all 12 sub-dimensions using Claude as an LLM judge.
 
 | Option | Default | Description |
 |---|---|---|
-| `--input-dir` | `data/input/` | Directory with assessment-input JSONL from `upload` |
-| `--output-dir` | `data/output/` | Where to write scored JSONL |
 | `--model` | `sonnet` | Claude model for grading (`sonnet`, `opus`, `haiku`) |
-| `--team-name` | (all) | Filter input files by team |
-| `--user-name` | (all) | Filter input files by user |
-| `--save-context` | off | Write a `.context.txt` showing grading details |
 
-**How it works**: Merges all input JSONL into one file, then makes 12 Claude subprocess calls (one per sub-dimension). Each call sends the ground truth rubric + the developer's actual records and asks Claude to assign a level.
+**How it works**: Reads the developer's records from the store, makes 12 Claude subprocess calls (one per sub-dimension), and saves the scored results back to the store.
 
-**Output**: A single `*_scored.jsonl` with 12 records (one per sub-dimension), each containing `level`, `confidence`, `evidence`, and `reasoning`.
+#### `ai-maturity report <NAME>`
 
-#### `ai-maturity report`
-
-Generates a polished Markdown assessment report with Claude-written narratives.
+Generates a polished assessment report with Claude-written narratives.
 
 | Option | Default | Description |
 |---|---|---|
-| `--scored-dir` | `data/output/` | Directory with scored JSONL from `assess` |
-| `--input-dir` | `data/input/` | Directory with input JSONL from `upload` (for exemplars) |
-| `--output-dir` | `reports/` | Where to write the report |
+| `--format` | `both` | Output format: `md`, `html`, or `both` |
 | `--model` | `sonnet` | Claude model for narrative writing |
-| `--team-name` | (all) | Filter by team |
-| `--user-name` | (all) | Filter by user |
+| `--output-dir` | `~/.ai-maturity/reports/` | Custom output directory |
 
 **How it works**: Makes 6 Claude subprocess calls:
 1. **Project context** (1 call) — reads all developer prompts and summarizes what they were building
 2. **Dimension narratives** (4 calls) — writes contextual analysis per dimension, weaving in direct quotes from the developer's prompts
 3. **Executive summary** (1 call) — synthesizes the overall assessment
 
-**Output**: A Markdown report with project context, score matrix, dimension narratives with inline evidence, and actionable recommendations.
+**Output**: Markdown and/or HTML report with project context, score matrix, dimension narratives with inline evidence, and actionable recommendations.
+
+#### `ai-maturity list`
+
+Shows all submitted developers and their assessment status.
+
+```
+Name                 Team            Submitted    Assessed
+------------------------------------------------------------
+alice                platform        2026-05-01   Yes
+bob                  infra           2026-04-30   No
+```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  UPLOAD (extract & route)                                       │
+│  SUBMIT (extract & route → store)                               │
 │                                                                 │
 │  classifier.py → extractor.py → router.py → pipeline.py        │
 │  Classify each    Pull data      Route to 1    Orchestrate      │
 │  JSONL record     payload        of 12 sub-    full flow        │
 │  into type        from record    dimensions                     │
 └──────────────────────────┬──────────────────────────────────────┘
-                           │ data/input/*.jsonl
+                           │ store.py (SQLite)
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  ASSESS (grade with Claude)                                     │
+│  ASSESS (grade with Claude → store)                             │
 │                                                                 │
 │  ground_truth.py → prompt_builder.py → claude_judge.py          │
 │  Parse rubric      Combine rubric +    Call claude -p            │
@@ -144,20 +146,22 @@ Generates a polished Markdown assessment report with Claude-written narratives.
 │  Orchestrate   Aggregate 12 scores → 4 dims → overall          │
 │  12 calls                                                       │
 └──────────────────────────┬──────────────────────────────────────┘
-                           │ data/output/*_scored.jsonl
+                           │ store.py (SQLite)
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  REPORT (generate narrative)                                    │
+│  REPORT (generate narrative → files)                            │
 │                                                                 │
 │  context_extractor.py → narrative_prompts.py → claude_writer.py │
 │  Summarize what       Build prompts that      Call claude -p     │
 │  developer was        ask for contextual      with --output-     │
 │  building             analysis + quotes       format text        │
 │                                                                 │
-│  exemplars.py → report.py                                       │
-│  Select top      Assemble full Markdown report                  │
-│  evidence                                                       │
+│  exemplars.py → report.py → html_report.py                      │
+│  Select top      Assemble       Convert to                      │
+│  evidence        Markdown       polished HTML                   │
 └─────────────────────────────────────────────────────────────────┘
+
+Storage: ~/.ai-maturity/store.db (SQLite) + ~/.ai-maturity/reports/
 ```
 
 ### Key Design Decisions
@@ -165,7 +169,8 @@ Generates a polished Markdown assessment report with Claude-written narratives.
 - **Claude CLI subprocess, not SDK** — No Python dependency on the Anthropic SDK. Uses `claude -p` via subprocess stdin. Two modes: `--json-schema` for structured grading output, `--output-format text` for narrative writing.
 - **One record → one sub-dimension** — Every extracted record routes to exactly one of 12 sub-dimensions. Routing is deterministic via keyword matching (prompts) and tool/skill pattern matching (tool calls).
 - **Ground truth in markdown** — The rubric lives in a human-readable markdown file (`docs/MATURITY_ASSESSMENT_GROUND_TRUTH.md`), parsed at runtime. Easy to edit and version.
-- **Per-project assessment** — Sessions are merged before grading so the developer gets one comprehensive assessment across all their sessions, not per-session fragments.
+- **SQLite store** — All data lives in `~/.ai-maturity/store.db`. No directory juggling. Submit once, assess and report by name.
+- **Per-project assessment** — All sessions for a developer are merged before grading, producing one comprehensive assessment.
 - **Graceful fallback** — If any Claude subprocess call fails (timeout, bad response), the system defaults to L1/low confidence rather than crashing.
 
 ### What Gets Routed Where
@@ -186,12 +191,12 @@ The router classifies records by content. Examples:
 
 ## Workflows
 
-### Assess a Single Project
+### Assess a Developer
 
 ```bash
-ai-maturity upload ~/.claude/projects/my-project/ --team-name eng --user-name alice --output-dir data/input
-ai-maturity assess --input-dir data/input/ --output-dir data/output/ --model sonnet
-ai-maturity report --scored-dir data/output/ --input-dir data/input/ --output-dir reports/
+ai-maturity submit ~/.claude/projects/my-project/ --name alice --team platform
+ai-maturity assess alice
+ai-maturity report alice
 ```
 
 ### Re-generate Report with Different Model
@@ -199,16 +204,14 @@ ai-maturity report --scored-dir data/output/ --input-dir data/input/ --output-di
 The `report` command doesn't re-grade — it just rewrites narratives from existing scores:
 
 ```bash
-ai-maturity report --scored-dir data/output/ --input-dir data/input/ --output-dir reports/ --model opus
+ai-maturity report alice --model opus
 ```
 
-### Assess with Debug Context
-
-See exactly what the grader sent to Claude for each sub-dimension:
+### HTML Report
 
 ```bash
-ai-maturity assess --input-dir data/input/ --output-dir data/output/ --save-context
-cat data/output/*_context.txt
+ai-maturity report alice --format html
+open ~/.ai-maturity/reports/alice_report.html
 ```
 
 ### Run Tests
