@@ -53,14 +53,14 @@ This registers the `ai-maturity` CLI command on your system. Requires Python 3.9
 ### Run the Full Pipeline
 
 ```bash
-# 1. Submit session logs (fast, no Claude calls)
-ai-maturity submit ~/.claude/projects/my-project/ --name alice --team platform
+# 1. Submit all Claude Code session logs (fast, no Claude calls)
+ai-maturity submit --name alice --email alice@company.com --team platform
 
 # 2. Grade maturity (12 Claude calls, ~2 min)
-ai-maturity assess alice
+ai-maturity assess --email alice@company.com
 
 # 3. Generate report (6 Claude calls, ~1 min)
-ai-maturity report alice
+ai-maturity report --email alice@company.com
 
 # 4. See all developers
 ai-maturity list
@@ -70,35 +70,46 @@ Reports are saved to `~/.ai-maturity/reports/`. All data is stored in `~/.ai-mat
 
 ### CLI Reference
 
-#### `ai-maturity submit <LOGS_PATH>`
+#### `ai-maturity submit [LOGS_PATH]`
 
 Extracts records from Claude Code session JSONL files, classifies and routes each to one of 12 sub-dimensions, and saves them to the local store.
+
+If `LOGS_PATH` is omitted, scans all projects under `~/.claude/projects/` automatically.
 
 | Option | Default | Description |
 |---|---|---|
 | `--name` | (required) | Developer name |
+| `--email` | (required) | Developer email (unique identifier) |
 | `--team` | (required) | Team name |
 
-**Input**: A directory containing `*.jsonl` session files (e.g., `~/.claude/projects/my-project/`)
+```bash
+# Scan all Claude projects automatically
+ai-maturity submit --name alice --email alice@company.com --team platform
 
-Re-submitting for the same name replaces previous records.
+# Or specify a single project
+ai-maturity submit ~/.claude/projects/my-project/ --name alice --email alice@company.com --team platform
+```
 
-#### `ai-maturity assess <NAME>`
+Re-submitting for the same email replaces previous records.
+
+#### `ai-maturity assess`
 
 Grades a developer's AI maturity across all 12 sub-dimensions using Claude as an LLM judge.
 
 | Option | Default | Description |
 |---|---|---|
+| `--email` | (required) | Developer email |
 | `--model` | `sonnet` | Claude model for grading (`sonnet`, `opus`, `haiku`) |
 
 **How it works**: Reads the developer's records from the store, makes 12 Claude subprocess calls (one per sub-dimension), and saves the scored results back to the store.
 
-#### `ai-maturity report <NAME>`
+#### `ai-maturity report`
 
 Generates a polished assessment report with Claude-written narratives.
 
 | Option | Default | Description |
 |---|---|---|
+| `--email` | (required) | Developer email |
 | `--format` | `both` | Output format: `md`, `html`, or `both` |
 | `--model` | `sonnet` | Claude model for narrative writing |
 | `--output-dir` | `~/.ai-maturity/reports/` | Custom output directory |
@@ -115,10 +126,10 @@ Generates a polished assessment report with Claude-written narratives.
 Shows all submitted developers and their assessment status.
 
 ```
-Name                 Team            Submitted    Assessed
-------------------------------------------------------------
-alice                platform        2026-05-01   Yes
-bob                  infra           2026-04-30   No
+Name             Email                          Team         Submitted    Assessed
+--------------------------------------------------------------------------------
+alice            alice@company.com              platform     2026-05-01   Yes
+bob              bob@company.com                infra        2026-04-30   No
 ```
 
 ## Architecture
@@ -169,7 +180,8 @@ Storage: ~/.ai-maturity/store.db (SQLite) + ~/.ai-maturity/reports/
 - **Claude CLI subprocess, not SDK** — No Python dependency on the Anthropic SDK. Uses `claude -p` via subprocess stdin. Two modes: `--json-schema` for structured grading output, `--output-format text` for narrative writing.
 - **One record → one sub-dimension** — Every extracted record routes to exactly one of 12 sub-dimensions. Routing is deterministic via keyword matching (prompts) and tool/skill pattern matching (tool calls).
 - **Ground truth in markdown** — The rubric lives in a human-readable markdown file (`docs/MATURITY_ASSESSMENT_GROUND_TRUTH.md`), parsed at runtime. Easy to edit and version.
-- **SQLite store** — All data lives in `~/.ai-maturity/store.db`. No directory juggling. Submit once, assess and report by name.
+- **SQLite store** — All data lives in `~/.ai-maturity/store.db`. No directory juggling. Submit once, assess and report by email.
+- **Email as unique key** — Developers are identified by email. Two people named "alice" on different teams are separate entries.
 - **Per-project assessment** — All sessions for a developer are merged before grading, producing one comprehensive assessment.
 - **Graceful fallback** — If any Claude subprocess call fails (timeout, bad response), the system defaults to L1/low confidence rather than crashing.
 
@@ -194,9 +206,9 @@ The router classifies records by content. Examples:
 ### Assess a Developer
 
 ```bash
-ai-maturity submit ~/.claude/projects/my-project/ --name alice --team platform
-ai-maturity assess alice
-ai-maturity report alice
+ai-maturity submit --name alice --email alice@company.com --team platform
+ai-maturity assess --email alice@company.com
+ai-maturity report --email alice@company.com
 ```
 
 ### Re-generate Report with Different Model
@@ -204,13 +216,13 @@ ai-maturity report alice
 The `report` command doesn't re-grade — it just rewrites narratives from existing scores:
 
 ```bash
-ai-maturity report alice --model opus
+ai-maturity report --email alice@company.com --model opus
 ```
 
 ### HTML Report
 
 ```bash
-ai-maturity report alice --format html
+ai-maturity report --email alice@company.com --format html
 open ~/.ai-maturity/reports/alice_report.html
 ```
 

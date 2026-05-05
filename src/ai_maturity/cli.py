@@ -21,7 +21,7 @@ def cli():
 
 
 @cli.command()
-@click.argument("logs_path", type=click.Path(exists=True))
+@click.argument("logs_path", type=click.Path(exists=True), required=False, default=None)
 @click.option("--name", required=True, help="Developer name")
 @click.option("--email", required=True, help="Developer email (unique identifier)")
 @click.option("--team", required=True, help="Team name")
@@ -29,31 +29,48 @@ def cli():
 def submit(logs_path, name, email, team, db):
     """Submit Claude Code session logs for a developer.
 
-    LOGS_PATH: Directory containing session .jsonl files
+    LOGS_PATH: Directory containing session .jsonl files.
+    If omitted, scans all projects under ~/.claude/projects/
 
-    Example:
-        ai-maturity submit ~/.claude/projects/myapp/ --name alice --email alice@company.com --team platform
+    Examples:
+        ai-maturity submit --name alice --email alice@co.com --team platform
+        ai-maturity submit ~/.claude/projects/myapp/ --name alice --email alice@co.com --team platform
     """
     from ai_maturity.pipeline import process_session
 
     store = _get_store(db)
-    logs = Path(logs_path)
 
-    session_files = sorted(logs.glob("*.jsonl"))
-    if not session_files:
-        click.echo(f"No .jsonl files found in {logs_path}")
-        return
+    if logs_path:
+        search_dirs = [Path(logs_path)]
+    else:
+        claude_projects = Path.home() / ".claude" / "projects"
+        if not claude_projects.exists():
+            click.echo(f"No Claude projects found at {claude_projects}")
+            return
+        search_dirs = sorted(d for d in claude_projects.iterdir() if d.is_dir())
+        click.echo(f"Scanning {len(search_dirs)} projects under {claude_projects}/")
 
     existing = store.get_developer(email)
     if existing:
         click.echo(f"  Note: replacing previous submission for {existing['name']} ({email})")
 
     all_records = []
-    for session_file in session_files:
-        results = process_session(session_file, team=team, user=name)
-        if results:
-            all_records.extend(results)
-            click.echo(f"  {session_file.name}: {len(results)} records")
+    for search_dir in search_dirs:
+        session_files = sorted(search_dir.glob("*.jsonl"))
+        if not session_files:
+            continue
+        dir_records = 0
+        for session_file in session_files:
+            results = process_session(session_file, team=team, user=name)
+            if results:
+                all_records.extend(results)
+                dir_records += len(results)
+        if dir_records:
+            click.echo(f"  {search_dir.name}: {dir_records} records from {len(session_files)} sessions")
+
+    if not all_records:
+        click.echo("No records extracted from any session files.")
+        return
 
     store.save_developer(email, name, team)
     store.save_records(email, all_records)
