@@ -22,13 +22,17 @@ def test_submit_creates_developer(tmp_path):
     session_dir.mkdir()
     (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
     runner = CliRunner()
-    result = runner.invoke(cli, ["submit", str(session_dir), "--name", "alice", "--team", "platform", "--db", str(db)])
+    result = runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "platform",
+        "--db", str(db),
+    ])
     assert result.exit_code == 0, result.output
     assert "alice" in result.output
     from ai_maturity.store import Store
     store = Store(db)
-    assert store.get_developer("alice") is not None
-    assert len(store.get_records("alice")) > 0
+    assert store.get_developer("alice@co.com") is not None
+    assert len(store.get_records("alice@co.com")) > 0
 
 def test_assess_grades_developer(tmp_path):
     db = tmp_path / "test.db"
@@ -36,14 +40,18 @@ def test_assess_grades_developer(tmp_path):
     session_dir.mkdir()
     (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
     runner = CliRunner()
-    runner.invoke(cli, ["submit", str(session_dir), "--name", "alice", "--team", "t", "--db", str(db)])
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "eng",
+        "--db", str(db),
+    ])
     with patch("ai_maturity.grader.call_claude_judge", return_value=FAKE_JUDGE):
-        result = runner.invoke(cli, ["assess", "alice", "--db", str(db)])
+        result = runner.invoke(cli, ["assess", "--email", "alice@co.com", "--db", str(db)])
     assert result.exit_code == 0, result.output
     assert "Overall" in result.output
     from ai_maturity.store import Store
     store = Store(db)
-    scores = store.get_scores("alice")
+    scores = store.get_scores("alice@co.com")
     assert len(scores) == 12
 
 def test_report_generates_output(tmp_path):
@@ -52,13 +60,20 @@ def test_report_generates_output(tmp_path):
     session_dir.mkdir()
     (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
     runner = CliRunner()
-    runner.invoke(cli, ["submit", str(session_dir), "--name", "alice", "--team", "t", "--db", str(db)])
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "eng",
+        "--db", str(db),
+    ])
     with patch("ai_maturity.grader.call_claude_judge", return_value=FAKE_JUDGE):
-        runner.invoke(cli, ["assess", "alice", "--db", str(db)])
+        runner.invoke(cli, ["assess", "--email", "alice@co.com", "--db", str(db)])
     report_dir = tmp_path / "reports"
     with patch("ai_maturity.report.call_claude_writer", return_value="Narrative."):
         with patch("ai_maturity.report.extract_project_context", return_value="Context."):
-            result = runner.invoke(cli, ["report", "alice", "--db", str(db), "--output-dir", str(report_dir), "--format", "md"])
+            result = runner.invoke(cli, [
+                "report", "--email", "alice@co.com",
+                "--db", str(db), "--output-dir", str(report_dir), "--format", "md",
+            ])
     assert result.exit_code == 0, result.output
     assert len(list(report_dir.glob("*.md"))) >= 1
 
@@ -68,8 +83,16 @@ def test_list_shows_developers(tmp_path):
     session_dir.mkdir()
     (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
     runner = CliRunner()
-    runner.invoke(cli, ["submit", str(session_dir), "--name", "alice", "--team", "platform", "--db", str(db)])
-    runner.invoke(cli, ["submit", str(session_dir), "--name", "bob", "--team", "infra", "--db", str(db)])
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "platform",
+        "--db", str(db),
+    ])
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "bob", "--email", "bob@co.com", "--team", "infra",
+        "--db", str(db),
+    ])
     result = runner.invoke(cli, ["list", "--db", str(db)])
     assert result.exit_code == 0
     assert "alice" in result.output
@@ -78,6 +101,29 @@ def test_list_shows_developers(tmp_path):
 def test_assess_unknown_developer(tmp_path):
     db = tmp_path / "test.db"
     runner = CliRunner()
-    result = runner.invoke(cli, ["assess", "nobody", "--db", str(db)])
+    result = runner.invoke(cli, ["assess", "--email", "nobody@co.com", "--db", str(db)])
     assert result.exit_code == 0
     assert "not found" in result.output.lower()
+
+def test_same_name_different_emails(tmp_path):
+    db = tmp_path / "test.db"
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir()
+    (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
+    runner = CliRunner()
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@platform.com", "--team", "platform",
+        "--db", str(db),
+    ])
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@infra.com", "--team", "infra",
+        "--db", str(db),
+    ])
+    result = runner.invoke(cli, ["list", "--db", str(db)])
+    assert result.output.count("alice") >= 2
+    from ai_maturity.store import Store
+    store = Store(db)
+    assert store.get_developer("alice@platform.com") is not None
+    assert store.get_developer("alice@infra.com") is not None

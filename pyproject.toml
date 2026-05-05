@@ -9,6 +9,7 @@ description = "AI Maturity Framework — assess and track AI adoption maturity a
 requires-python = ">=3.9"
 dependencies = [
     "click>=8.0",
+    "markdown>=3.4",
 ]
 
 [project.optional-dependencies]
