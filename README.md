@@ -50,6 +50,26 @@ pip install -e .
 
 This registers the `ai-maturity` CLI command on your system. Requires Python 3.9+ and the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated.
 
+### Authenticate Claude Code
+
+The `assess` and `report` commands call Claude via the Claude Code CLI. You need to authenticate once before using them.
+
+**Option 1 — Claude login (recommended):**
+
+```bash
+claude login
+```
+
+Opens a browser, log in with your Anthropic account. Credentials are stored in your keychain and persist across sessions.
+
+**Option 2 — API key:**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Add to `~/.zshrc` or `~/.bashrc` to make it permanent.
+
 ### Run the Full Pipeline
 
 ```bash

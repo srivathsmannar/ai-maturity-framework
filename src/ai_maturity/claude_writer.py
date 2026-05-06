@@ -17,7 +17,6 @@ def call_claude_writer(
         "--output-format", "text",
         "--model", model,
         "--no-session-persistence",
-        "--bare",
     ]
 
     try:

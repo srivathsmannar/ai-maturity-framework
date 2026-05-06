@@ -51,7 +51,6 @@ def call_claude_judge(
         "--json-schema", json.dumps(GRADING_SCHEMA),
         "--model", model,
         "--no-session-persistence",
-        "--bare",
     ]
 
     try:
