@@ -37,6 +37,11 @@ class Store:
                 scored_at TEXT NOT NULL,
                 scores_json TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS metrics (
+                email TEXT PRIMARY KEY REFERENCES developers(email),
+                computed_at TEXT NOT NULL,
+                metrics_json TEXT NOT NULL
+            );
         """)
 
     def save_developer(self, email: str, name: str, team: str) -> None:
@@ -86,6 +91,22 @@ class Store:
         ).fetchone()
         if row is None:
             return []
+        return json.loads(row[0])
+
+    def save_metrics(self, email: str, metrics: dict) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            "INSERT OR REPLACE INTO metrics (email, computed_at, metrics_json) VALUES (?, ?, ?)",
+            (email, now, json.dumps(metrics)),
+        )
+        self._conn.commit()
+
+    def get_metrics(self, email: str) -> Optional[dict]:
+        row = self._conn.execute(
+            "SELECT metrics_json FROM metrics WHERE email = ?", (email,)
+        ).fetchone()
+        if row is None:
+            return None
         return json.loads(row[0])
 
     def list_developers(self) -> List[dict]:

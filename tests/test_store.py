@@ -161,3 +161,25 @@ def test_import_developer_missing_metadata(tmp_path):
     bad_file.write_text(json.dumps({"type": "record", "id": "x"}) + "\n")
     with pytest.raises(ValueError, match="metadata"):
         store.import_developer(bad_file)
+
+def test_save_and_get_metrics(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.save_developer("alice@co.com", "alice", "platform")
+    metrics = {"session_count": 5, "total_messages": 42, "tool_call_count": 10}
+    store.save_metrics("alice@co.com", metrics)
+    result = store.get_metrics("alice@co.com")
+    assert result is not None
+    assert result["session_count"] == 5
+    assert result["total_messages"] == 42
+
+def test_get_metrics_not_found(tmp_path):
+    store = Store(tmp_path / "test.db")
+    assert store.get_metrics("nobody@co.com") is None
+
+def test_save_metrics_replaces_previous(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.save_developer("alice@co.com", "alice", "platform")
+    store.save_metrics("alice@co.com", {"session_count": 1})
+    store.save_metrics("alice@co.com", {"session_count": 99})
+    result = store.get_metrics("alice@co.com")
+    assert result["session_count"] == 99

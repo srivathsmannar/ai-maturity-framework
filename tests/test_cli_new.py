@@ -198,3 +198,51 @@ def test_import_invalid_file(tmp_path):
     result = runner.invoke(cli, ["import", str(bad_file), "--db", str(db)])
     assert result.exit_code == 0
     assert "invalid" in result.output.lower()
+
+def test_assess_stores_metrics(tmp_path):
+    db = tmp_path / "test.db"
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir()
+    (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
+    runner = CliRunner()
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "eng",
+        "--db", str(db),
+    ])
+    with patch("ai_maturity.grader.call_claude_judge", return_value=FAKE_JUDGE):
+        runner.invoke(cli, ["assess", "--email", "alice@co.com", "--db", str(db)])
+    from ai_maturity.store import Store
+    store = Store(db)
+    metrics = store.get_metrics("alice@co.com")
+    assert metrics is not None
+    assert "session_count" in metrics
+    assert "total_messages" in metrics
+    assert "records_by_sub_dimension" in metrics
+
+def test_report_passes_metrics_to_generator(tmp_path):
+    db = tmp_path / "test.db"
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir()
+    (session_dir / "abc123.jsonl").write_text(json.dumps(SAMPLE_SESSION_RECORD) + "\n")
+    runner = CliRunner()
+    runner.invoke(cli, [
+        "submit", str(session_dir),
+        "--name", "alice", "--email", "alice@co.com", "--team", "eng",
+        "--db", str(db),
+    ])
+    with patch("ai_maturity.grader.call_claude_judge", return_value=FAKE_JUDGE):
+        runner.invoke(cli, ["assess", "--email", "alice@co.com", "--db", str(db)])
+
+    report_dir = tmp_path / "reports"
+    with patch("ai_maturity.report.call_claude_writer", return_value="Narrative."), \
+         patch("ai_maturity.report.extract_project_context", return_value="Context."):
+        result = runner.invoke(cli, [
+            "report", "--email", "alice@co.com", "--db", str(db),
+            "--output-dir", str(report_dir), "--format", "md",
+        ])
+    assert result.exit_code == 0, result.output
+    md_files = list(report_dir.glob("*.md"))
+    assert len(md_files) == 1
+    content = md_files[0].read_text()
+    assert "## Usage Analytics" in content

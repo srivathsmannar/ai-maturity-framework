@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ai_maturity.analytics_prompts import build_analytics_prompt
 from ai_maturity.claude_writer import call_claude_writer
 from ai_maturity.context_extractor import extract_project_context
 from ai_maturity.exemplars import load_exemplars
@@ -37,30 +39,14 @@ def generate_report(
     scored_path: Path,
     input_path: Path,
     model: str = "sonnet",
+    metrics: dict | None = None,
 ) -> str:
-    """Generate the full Markdown assessment report.
-
-    Parameters
-    ----------
-    scored_path:
-        Path to the scored JSONL file (grading output with levels/reasoning).
-    input_path:
-        Path to the input JSONL file (raw records for exemplars).
-    model:
-        Claude model to use for narrative generation.
-
-    Returns
-    -------
-    str
-        The complete Markdown report.
-    """
     scored = _load_jsonl(scored_path)
     meta = _extract_meta(scored)
     scores = compute_scores(scored)
     by_dim = _group_by_dimension(scored)
 
     # Extract project context from input prompts
-    import sys
     print("  Extracting project context...", file=sys.stderr, flush=True)
     project_context = extract_project_context(input_path, model)
 
@@ -75,6 +61,13 @@ def generate_report(
     exec_narrative = call_claude_writer(exec_prompt, model) or _PLACEHOLDER_EXEC
     sections.append(_render_header(meta, scores))
     sections.append(_render_opening(scores, project_context, exec_narrative, scored))
+
+    # Analytics section (if metrics available)
+    if metrics is not None:
+        print("  Writing analytics section...", file=sys.stderr, flush=True)
+        analytics_prompt = build_analytics_prompt(metrics, meta["user"], meta["team"])
+        analytics_narrative = call_claude_writer(analytics_prompt, model) or ""
+        sections.append(_render_analytics_section(analytics_narrative))
 
     # Dimension sections
     dim_narratives: dict[str, str] = {}
@@ -292,6 +285,10 @@ def _render_recommendations(dim_narratives: dict[str, str]) -> str:
         idx += 1
     lines.append("")
     return "\n".join(lines)
+
+
+def _render_analytics_section(narrative: str) -> str:
+    return f"\n---\n\n## Usage Analytics\n\n{narrative}\n"
 
 
 def _extract_last_sentence(text: str) -> str:

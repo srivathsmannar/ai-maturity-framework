@@ -142,6 +142,11 @@ def assess(email, model, db):
 
     store.save_scores(email, results)
 
+    from ai_maturity.metrics_computer import compute_metrics
+    metrics = compute_metrics(records)
+    store.save_metrics(email, metrics)
+    click.echo("  Metrics computed and stored.")
+
     scores = compute_scores(results)
     click.echo(f"\n{'=' * 50}")
     click.echo(f"Overall Score: {scores['overall_score']}  ({scores['maturity_label']})")
@@ -187,7 +192,8 @@ def report(email, output_format, model, output_dir, db):
     tmp_scored = store.write_scores_jsonl(email)
     tmp_input = store.write_records_jsonl(email)
     try:
-        md_content = generate_report(tmp_scored, tmp_input, model=model)
+        metrics = store.get_metrics(email)
+        md_content = generate_report(tmp_scored, tmp_input, model=model, metrics=metrics)
     finally:
         tmp_scored.unlink(missing_ok=True)
         tmp_input.unlink(missing_ok=True)
