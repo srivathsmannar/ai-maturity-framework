@@ -1,6 +1,7 @@
 """AI Maturity Framework CLI."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import click
@@ -75,6 +76,34 @@ def submit(logs_path, name, email, team, db):
     store.save_developer(email, name, team)
     store.save_records(email, all_records)
     click.echo(f"\nSubmitted {len(all_records)} records for {name} <{email}> ({team})")
+
+
+@cli.command()
+@click.option("--email", required=True, help="Developer email")
+@click.option("--output-dir", default=".", show_default=True, help="Directory to write export file")
+@click.option("--db", default=None, hidden=True)
+def export(email, output_dir, db):
+    """Export a developer's records to a JSONL file for sharing.
+
+    The exported file contains all records needed for assessment.
+    Send it to the assessor, who runs 'ai-maturity import' to load it.
+
+    Example:
+        ai-maturity export --email alice@company.com
+        # produces: alice_records.jsonl — attach and send to assessor
+    """
+    store = _get_store(db)
+    dev = store.get_developer(email)
+    if dev is None:
+        click.echo(f"Developer '{email}' not found. Run 'submit' first.")
+        return
+
+    stem = email.split("@")[0]
+    out_path = Path(output_dir) / f"{stem}_records.jsonl"
+    count = store.export_developer(email, out_path)
+    click.echo(f"Exported {count} records for {dev['name']} <{email}> ({dev['team']})")
+    click.echo(f"  File: {out_path}")
+    click.echo(f"  Send this file to your assessor, who will run 'ai-maturity import {out_path.name}'")
 
 
 @cli.command()
@@ -178,6 +207,36 @@ def report(email, output_format, model, output_dir, db):
         html_path = out / f"{stem}_report.html"
         md_to_html(md_path, html_path)
         click.echo(f"  HTML: {html_path}")
+
+
+@cli.command(name="import")
+@click.argument("import_path", type=click.Path(exists=True))
+@click.option("--db", default=None, hidden=True)
+def import_developer(import_path, db):
+    """Import a developer's records from an exported JSONL file.
+
+    IMPORT_PATH: Path to the .jsonl file produced by 'ai-maturity export'.
+
+    Example:
+        ai-maturity import alice_records.jsonl
+        ai-maturity assess --email alice@company.com
+    """
+    import_file = Path(import_path)
+    try:
+        meta = json.loads(import_file.read_text(encoding="utf-8").splitlines()[0])
+    except (json.JSONDecodeError, IndexError):
+        click.echo("Import failed: import file is invalid")
+        return
+
+    store = _get_store(db)
+    try:
+        count = store.import_developer(import_file)
+    except ValueError as e:
+        click.echo(f"Import failed: {e}")
+        return
+
+    click.echo(f"Imported {count} records for {meta['name']} <{meta['email']}> ({meta['team']})")
+    click.echo(f"  Run: ai-maturity assess --email {meta['email']}")
 
 
 @cli.command(name="list")

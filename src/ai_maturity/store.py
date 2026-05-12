@@ -115,6 +115,44 @@ class Store:
                 f.write(json.dumps(score) + "\n")
         return tmp
 
+    def export_developer(self, email: str, output_path: Path) -> int:
+        dev = self.get_developer(email)
+        if dev is None:
+            raise ValueError(f"Developer '{email}' not found")
+        records = self.get_records(email)
+        with open(output_path, "w", encoding="utf-8") as f:
+            meta = {"type": "developer", "email": dev["email"], "name": dev["name"], "team": dev["team"]}
+            f.write(json.dumps(meta) + "\n")
+            for rec in records:
+                f.write(json.dumps(rec) + "\n")
+        return len(records)
+
+    def import_developer(self, import_path: Path) -> int:
+        with open(import_path, encoding="utf-8") as f:
+            lines = [l.strip() for l in f if l.strip()]
+
+        if not lines:
+            raise ValueError("import file is empty or invalid")
+
+        try:
+            meta = json.loads(lines[0])
+        except json.JSONDecodeError:
+            raise ValueError("import file is invalid — first line must be JSON metadata")
+
+        if meta.get("type") != "developer" or not meta.get("email"):
+            raise ValueError("import file is missing developer metadata on line 1")
+
+        records = []
+        for line in lines[1:]:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                raise ValueError("import file is invalid — non-JSON line in records")
+
+        self.save_developer(meta["email"], meta["name"], meta["team"])
+        self.save_records(meta["email"], records)
+        return len(records)
+
     def reports_dir(self) -> Path:
         d = self.db_path.parent / "reports"
         d.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,5 @@
 import json
+import pytest
 from ai_maturity.store import Store
 
 SAMPLE_RECORDS = [
@@ -96,3 +97,67 @@ def test_same_name_different_emails(tmp_path):
     assert len(store.get_records("alice@infra.com")) == 1
     devs = store.list_developers()
     assert len(devs) == 2
+
+def test_export_developer(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.save_developer("alice@co.com", "alice", "platform")
+    store.save_records("alice@co.com", SAMPLE_RECORDS)
+    out = tmp_path / "alice_records.jsonl"
+    count = store.export_developer("alice@co.com", out)
+    assert count == 2
+    lines = out.read_text().strip().split("\n")
+    assert len(lines) == 3  # 1 metadata + 2 records
+    meta = json.loads(lines[0])
+    assert meta["type"] == "developer"
+    assert meta["email"] == "alice@co.com"
+    assert meta["name"] == "alice"
+    assert meta["team"] == "platform"
+    rec = json.loads(lines[1])
+    assert rec["id"] == "in-001"
+
+def test_export_developer_not_found(tmp_path):
+    store = Store(tmp_path / "test.db")
+    out = tmp_path / "nobody.jsonl"
+    with pytest.raises(ValueError, match="not found"):
+        store.export_developer("nobody@co.com", out)
+
+def test_import_developer(tmp_path):
+    store_a = Store(tmp_path / "a.db")
+    store_a.save_developer("alice@co.com", "alice", "platform")
+    store_a.save_records("alice@co.com", SAMPLE_RECORDS)
+    export_path = tmp_path / "alice_records.jsonl"
+    store_a.export_developer("alice@co.com", export_path)
+
+    store_b = Store(tmp_path / "b.db")
+    count = store_b.import_developer(export_path)
+    assert count == 2
+    dev = store_b.get_developer("alice@co.com")
+    assert dev is not None
+    assert dev["name"] == "alice"
+    records = store_b.get_records("alice@co.com")
+    assert len(records) == 2
+    assert records[0]["id"] == "in-001"
+
+def test_import_developer_replaces_existing(tmp_path):
+    store = Store(tmp_path / "test.db")
+    store.save_developer("alice@co.com", "alice", "platform")
+    store.save_records("alice@co.com", SAMPLE_RECORDS)
+    export_path = tmp_path / "alice_records.jsonl"
+    store.export_developer("alice@co.com", export_path)
+    count = store.import_developer(export_path)
+    assert count == 2
+    assert len(store.get_records("alice@co.com")) == 2
+
+def test_import_developer_invalid_file(tmp_path):
+    store = Store(tmp_path / "test.db")
+    bad_file = tmp_path / "bad.jsonl"
+    bad_file.write_text("not json\n")
+    with pytest.raises(ValueError, match="invalid"):
+        store.import_developer(bad_file)
+
+def test_import_developer_missing_metadata(tmp_path):
+    store = Store(tmp_path / "test.db")
+    bad_file = tmp_path / "bad.jsonl"
+    bad_file.write_text(json.dumps({"type": "record", "id": "x"}) + "\n")
+    with pytest.raises(ValueError, match="metadata"):
+        store.import_developer(bad_file)
