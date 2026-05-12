@@ -7,16 +7,20 @@ Assess how effectively developers use AI coding tools by analyzing their Claude 
 The framework reads Claude Code session JSONL files — the logs that Claude Code automatically creates during every session — and evaluates the developer's AI usage patterns across 4 dimensions and 12 sub-dimensions.
 
 ```
-Session JSONL → upload → classify & route → assess → grade with Claude → report
+Developer laptop:  submit → export → send file
+Assessor laptop:            import → assess → report
 ```
 
-**Three CLI commands, three stages:**
+**Five CLI commands across two roles:**
 
-1. **`upload`** — Extracts and classifies records from raw session logs. Each record (prompt, tool call, agent spawn, skill invocation) is routed to one of 12 sub-dimensions based on its content.
+**Developer (their own laptop):**
+1. **`submit`** — Extracts and classifies records from Claude Code session logs. Each record (prompt, tool call, agent spawn, skill invocation) is routed to one of 12 sub-dimensions based on its content.
+2. **`export`** — Packages all records into a single JSONL file to send to the assessor.
 
-2. **`assess`** — Grades each sub-dimension L1–L4 using Claude as an LLM judge. Merges all sessions per-project into one assessment. Claude compares the developer's actual behavior against a ground truth rubric.
-
-3. **`report`** — Generates a Markdown assessment report with Claude-written narratives. Includes project context extraction, per-dimension analysis with inline evidence quotes, and actionable recommendations.
+**Assessor (their own laptop):**
+3. **`import`** — Loads a developer's exported file into the assessor's local store.
+4. **`assess`** — Grades each sub-dimension L1–L4 using Claude as an LLM judge. Claude compares the developer's actual behavior against a ground truth rubric.
+5. **`report`** — Generates a Markdown and/or HTML assessment report with Claude-written narratives, per-dimension analysis with inline evidence quotes, and actionable recommendations.
 
 ## The Maturity Model
 
@@ -72,17 +76,29 @@ Add to `~/.zshrc` or `~/.bashrc` to make it permanent.
 
 ### Run the Full Pipeline
 
-```bash
-# 1. Submit all Claude Code session logs (fast, no Claude calls)
-ai-maturity submit --name alice --email alice@company.com --team platform
+**Step 1 — Developer runs on their own laptop:**
 
-# 2. Grade maturity (12 Claude calls, ~2 min)
+```bash
+# Extract session logs and export to a file (no Claude calls)
+ai-maturity submit --name alice --email alice@company.com --team platform
+ai-maturity export --email alice@company.com
+# → produces alice_records.jsonl
+# Send alice_records.jsonl to the assessor via email or Slack
+```
+
+**Step 2 — Assessor runs on their own laptop:**
+
+```bash
+# Load the developer's records
+ai-maturity import alice_records.jsonl
+
+# Grade maturity (12 Claude calls, ~2 min)
 ai-maturity assess --email alice@company.com
 
-# 3. Generate report (6 Claude calls, ~1 min)
+# Generate report (6 Claude calls, ~1 min)
 ai-maturity report --email alice@company.com
 
-# 4. See all developers
+# See all developers
 ai-maturity list
 ```
 
@@ -111,6 +127,34 @@ ai-maturity submit ~/.claude/projects/my-project/ --name alice --email alice@com
 ```
 
 Re-submitting for the same email replaces previous records.
+
+#### `ai-maturity export`
+
+Packages a developer's extracted records into a self-contained JSONL file for sharing with the assessor.
+
+| Option | Default | Description |
+|---|---|---|
+| `--email` | (required) | Developer email |
+| `--output-dir` | `.` | Directory to write the export file |
+
+```bash
+ai-maturity export --email alice@company.com
+# → produces alice_records.jsonl in the current directory
+```
+
+The file contains everything needed to run `assess` and `report` — no information is lost. Send it to the assessor via email or Slack.
+
+#### `ai-maturity import IMPORT_PATH`
+
+Loads an exported JSONL file into the assessor's local store.
+
+```bash
+ai-maturity import alice_records.jsonl
+# → Imported 847 records for alice <alice@company.com> (platform)
+# → Run: ai-maturity assess --email alice@company.com
+```
+
+Re-importing for the same email replaces previous records.
 
 #### `ai-maturity assess`
 
@@ -225,8 +269,16 @@ The router classifies records by content. Examples:
 
 ### Assess a Developer
 
+**Developer (their laptop):**
 ```bash
 ai-maturity submit --name alice --email alice@company.com --team platform
+ai-maturity export --email alice@company.com
+# Send alice_records.jsonl to assessor
+```
+
+**Assessor (their laptop):**
+```bash
+ai-maturity import alice_records.jsonl
 ai-maturity assess --email alice@company.com
 ai-maturity report --email alice@company.com
 ```
