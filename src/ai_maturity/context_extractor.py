@@ -47,6 +47,7 @@ Cover:
 
 Write in third person past tense ("The developer was building...", "They used...").
 Be specific — name the actual project, systems, and outputs. No generic platitudes.
+Start directly with the summary — do not include any preamble or introduction such as "Here is the project context:" or "Based on the prompts...".
 
 ---
 
@@ -55,4 +56,20 @@ Developer prompts:
 {combined}"""
 
     result = call_claude_writer(prompt, model=model)
+    if result:
+        result = _strip_preamble(result)
     return result or _FALLBACK
+
+
+def _strip_preamble(text: str) -> str:
+    """Remove a leading preamble line if Claude added one despite instructions."""
+    lines = text.strip().splitlines()
+    if not lines:
+        return text
+    first = lines[0].lower()
+    preamble_signals = ("here is", "here's", "based on", "looking at", "below is", "the following")
+    if any(first.startswith(s) for s in preamble_signals) and first.endswith(":"):
+        lines = lines[1:]
+        while lines and not lines[0].strip():
+            lines = lines[1:]
+    return "\n".join(lines)
